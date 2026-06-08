@@ -35,6 +35,20 @@ class RegionAnnotation:
         )
 
 
+@dataclass
+class FOVAnnotation:
+    id: str
+    x: float  # top-left x
+    y: float  # top-left y
+    w: float = 512.0
+    h: float = 512.0
+    type: str = "fov"
+
+    @staticmethod
+    def create(x: float, y: float, w: float = 512.0, h: float = 512.0) -> "FOVAnnotation":
+        return FOVAnnotation(id=str(uuid.uuid4()), x=x, y=y, w=w, h=h)
+
+
 class AnnotationStore(QObject):
     annotation_added = Signal(str)      # id
     annotation_removed = Signal(str)    # id
@@ -45,6 +59,7 @@ class AnnotationStore(QObject):
         super().__init__(parent)
         self._markers: dict[str, CellMarker] = {}
         self._regions: dict[str, RegionAnnotation] = {}
+        self._fovs: dict[str, FOVAnnotation] = {}
         self._selected: set[str] = set()
         self.is_dirty = False
 
@@ -65,9 +80,20 @@ class AnnotationStore(QObject):
         self.annotation_added.emit(r.id)
         return r
 
+    def add_fov(
+        self, cx: float, cy: float, w: float = 512.0, h: float = 512.0
+    ) -> FOVAnnotation:
+        # cx, cy is the center; stored x,y is top-left
+        f = FOVAnnotation.create(cx - w / 2, cy - h / 2, w, h)
+        self._fovs[f.id] = f
+        self.is_dirty = True
+        self.annotation_added.emit(f.id)
+        return f
+
     def delete(self, ann_id: str) -> None:
         self._markers.pop(ann_id, None)
         self._regions.pop(ann_id, None)
+        self._fovs.pop(ann_id, None)
         self._selected.discard(ann_id)
         self.is_dirty = True
         self.annotation_removed.emit(ann_id)
@@ -92,8 +118,8 @@ class AnnotationStore(QObject):
             new_sel.add(ann_id)
         self.set_selected(new_sel)
 
-    def get_annotation(self, ann_id: str) -> CellMarker | RegionAnnotation | None:
-        return self._markers.get(ann_id) or self._regions.get(ann_id)
+    def get_annotation(self, ann_id: str) -> CellMarker | RegionAnnotation | FOVAnnotation | None:
+        return self._markers.get(ann_id) or self._regions.get(ann_id) or self._fovs.get(ann_id)
 
     def get_marker(self, ann_id: str) -> CellMarker | None:
         return self._markers.get(ann_id)
@@ -113,5 +139,9 @@ class AnnotationStore(QObject):
     def regions(self) -> dict[str, RegionAnnotation]:
         return self._regions
 
-    def all_annotations(self) -> list[CellMarker | RegionAnnotation]:
-        return list(self._markers.values()) + list(self._regions.values())
+    @property
+    def fovs(self) -> dict[str, FOVAnnotation]:
+        return self._fovs
+
+    def all_annotations(self) -> list[CellMarker | RegionAnnotation | FOVAnnotation]:
+        return list(self._markers.values()) + list(self._regions.values()) + list(self._fovs.values())

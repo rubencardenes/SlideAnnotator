@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
+
 from PySide6.QtCore import Qt, QThreadPool
+from PySide6.QtGui import QImage
 from PySide6.QtWidgets import (
     QFileDialog,
     QMainWindow,
@@ -13,7 +16,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..annotations.models import AnnotationStore
-from ..annotations.serializer import load_annotations, save_annotations
+from ..annotations.serializer import export_markers_txt, load_annotations, save_annotations
 from ..compositing.compositor import ChannelSettings
 from ..graphics.slide_scene import SlideScene
 from ..graphics.slide_view import SlideView
@@ -77,6 +80,7 @@ class MainWindow(QMainWindow):
         self._channel_panel.channel_selected.connect(self._on_active_channel)
 
         self._view = SlideView()
+        self._view.space_pressed.connect(self._toggle_annotations)
         splitter.addWidget(self._channel_panel)
         splitter.addWidget(self._view)
         splitter.setSizes([230, 1170])
@@ -100,6 +104,15 @@ class MainWindow(QMainWindow):
         self._save_action.setShortcut("Ctrl+S")
         self._save_action.triggered.connect(self._save_annotations)
         self._save_action.setEnabled(False)
+
+        self._export_action = file_menu.addAction("&Export Cell Markers (txt)…")
+        self._export_action.setShortcut("Ctrl+E")
+        self._export_action.triggered.connect(self._export_markers)
+        self._export_action.setEnabled(False)
+
+        self._save_fov_action = file_menu.addAction("Save &FOV Images…")
+        self._save_fov_action.triggered.connect(self._save_fov_images)
+        self._save_fov_action.setEnabled(False)
 
         file_menu.addSeparator()
         quit_action = file_menu.addAction("&Quit")
@@ -174,7 +187,7 @@ class MainWindow(QMainWindow):
             # Tools
             self._tools = {
                 "pan": PanTool(scene, self._store),
-                "cell_marker": CellMarkerTool(scene, self._store),
+                "cell_marker": CellMarkerTool(scene, self._store, self._view),
                 "region": RegionTool(scene, self._store, self._view),
                 "select": SelectTool(scene, self._store, self._view),
             }
@@ -184,12 +197,17 @@ class MainWindow(QMainWindow):
             self._on_tool_changed("pan")
             self._toolbar._pan_btn.setChecked(True)
 
+            # Connect FOV creation from view key shortcut
+            self._view.fov_requested.connect(self._on_fov_requested)
+
             # Load existing annotations if present
             ann_path = path.with_suffix(path.suffix + ".annotations.json")
             if ann_path.exists():
                 load_annotations(ann_path, self._store)
 
             self._save_action.setEnabled(True)
+            self._export_action.setEnabled(True)
+            self._save_fov_action.setEnabled(True)
             self.setWindowTitle(f"SlideAnnotator — {path.name}")
 
         except Exception as exc:
@@ -203,6 +221,22 @@ class MainWindow(QMainWindow):
         )
         save_annotations(ann_path, self._slide_path, self._store)
         self._store.set_dirty(False)
+
+    def _export_markers(self) -> None:
+        if self._store is None or self._slide_path is None:
+            return
+        txt_path = self._slide_path.with_suffix(
+            self._slide_path.suffix + ".markers.txt"
+        )
+        export_markers_txt(txt_path, self._slide_path, self._store)
+        QMessageBox.information(
+            self, "Export Complete", f"Markers exported to:\n{txt_path}"
+        )
+
+    def _on_fov_requested(self, scene_pos) -> None:
+        if self._store is None:
+            return
+        self._store.add_fov(scene_pos.x(), scene_pos.y())
 
     # ------------------------------------------------------------------
     def _on_tool_changed(self, name: str) -> None:
@@ -252,6 +286,82 @@ class MainWindow(QMainWindow):
             ).boundingRect()
             zoom = self._view.current_zoom()
             scene.update_viewport(vr, zoom)
+
+    def _toggle_annotations(self) -> None:
+        self._toolbar.toggle_annotations_visibility()
+
+    def _save_fov_images(self) -> None:
+        if self._store is None or self._slide_path is None or self._reader is None:
+            return
+
+        fovs = list(self._store.fovs.values())
+        if not fovs:
+            QMessageBox.information(self, "No FOVs", "No FOV annotations to export.")
+            return
+
+        images_dir = self._slide_path.parent / "images"
+        images_dir.mkdir(exist_ok=True)
+
+        visible: list[tuple] = [
+            (i, ch, self._channel_settings[i])
+            for i, ch in enumerate(self._reader.channels)
+            if i < len(self._channel_settings) and self._channel_settings[i].visible
+        ]
+        if not visible:
+            QMessageBox.information(self, "No Visible Channels", "No channels are visible.")
+            return
+
+        def _is_blue(name: str) -> bool:
+            n = name.lower()
+            return "dapi" in n or "hoechst" in n
+
+        ch_r = ch_g = ch_b = ch_gray = None
+        if len(visible) == 1:
+            ch_gray = visible[0]
+        else:
+            blue_list = [t for t in visible if _is_blue(t[1].name)]
+            ch_b = blue_list[0] if blue_list else visible[-1]
+            rest = [t for t in visible if t is not ch_b]
+            ch_r = rest[0] if rest else None
+            ch_g = rest[1] if len(rest) > 1 else None
+
+        def _to_u8(arr: np.ndarray, s) -> np.ndarray:
+            a = arr.astype(np.float32)
+            span = max(float(s.max_val) - float(s.min_val), 1.0)
+            return (np.clip((a - float(s.min_val)) / span, 0.0, 1.0) * 255.0).astype(np.uint8)
+
+        stem = self._slide_path.stem
+        saved = errors = 0
+
+        for fov in fovs:
+            x, y = int(fov.x), int(fov.y)
+            w, h = int(fov.w), int(fov.h)
+            out_path = images_dir / f"{stem}_{x}_{y}_{w}.png"
+            try:
+                raw = self._reader.read_region(0, x, y, w, h)
+                if ch_gray is not None:
+                    idx, _, s = ch_gray
+                    data = np.ascontiguousarray(_to_u8(raw[idx], s))
+                    qimg = QImage(data.data, w, h, w, QImage.Format.Format_Grayscale8)
+                else:
+                    rgb = np.zeros((h, w, 3), dtype=np.uint8)
+                    if ch_r is not None:
+                        rgb[:, :, 0] = _to_u8(raw[ch_r[0]], ch_r[2])
+                    if ch_g is not None:
+                        rgb[:, :, 1] = _to_u8(raw[ch_g[0]], ch_g[2])
+                    if ch_b is not None:
+                        rgb[:, :, 2] = _to_u8(raw[ch_b[0]], ch_b[2])
+                    data = np.ascontiguousarray(rgb)
+                    qimg = QImage(data.data, w, h, w * 3, QImage.Format.Format_RGB888)
+                qimg.copy().save(str(out_path), "PNG")
+                saved += 1
+            except Exception:
+                errors += 1
+
+        msg = f"Saved {saved} FOV image(s) to:\n{images_dir}"
+        if errors:
+            msg += f"\n({errors} error(s))"
+        QMessageBox.information(self, "FOV Images Saved", msg)
 
     # ------------------------------------------------------------------
     def _prompt_save(self) -> bool:

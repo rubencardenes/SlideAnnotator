@@ -1,52 +1,194 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Signal
-from PySide6.QtGui import QIcon, QColor
+import math
+
+from PySide6.QtCore import Qt, QPointF, QSize, Signal
+from PySide6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import (
     QLabel,
+    QSizePolicy,
     QToolBar,
     QToolButton,
     QWidget,
-    QHBoxLayout,
-    QSizePolicy,
 )
 
+_ICON_SZ = 26
+_BTN_SZ = 36
 
-def _make_icon_button(text: str, tooltip: str, checkable: bool = True) -> QToolButton:
+
+def _icon_pan(size: int = _ICON_SZ) -> QIcon:
+    pix = QPixmap(size, size)
+    pix.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pix)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    c = size / 2.0
+    color = QColor(60, 185, 255)
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(color)
+    tip_r, base_r, aw = size * 0.44, size * 0.22, size * 0.17
+    for deg in (0, 90, 180, 270):
+        rad = math.radians(deg)
+        dx, dy = math.sin(rad), -math.cos(rad)
+        px, py = math.cos(rad), math.sin(rad)
+        path = QPainterPath()
+        path.moveTo(c + dx * tip_r, c + dy * tip_r)
+        path.lineTo(c + dx * base_r - px * aw, c + dy * base_r - py * aw)
+        path.lineTo(c + dx * base_r + px * aw, c + dy * base_r + py * aw)
+        path.closeSubpath()
+        p.drawPath(path)
+    p.setBrush(QColor(60, 185, 255, 160))
+    p.drawEllipse(QPointF(c, c), size * 0.11, size * 0.11)
+    p.end()
+    return QIcon(pix)
+
+
+def _icon_marker(size: int = _ICON_SZ) -> QIcon:
+    pix = QPixmap(size, size)
+    pix.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pix)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    c = size / 2.0
+    color = QColor(55, 215, 100)
+    pen = QPen(color, size * 0.10)
+    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+    p.setPen(pen)
+    p.setBrush(Qt.BrushStyle.NoBrush)
+    p.drawEllipse(QPointF(c, c), size * 0.36, size * 0.36)
+    pen2 = QPen(color, size * 0.08)
+    p.setPen(pen2)
+    h = size * 0.14
+    p.drawLine(QPointF(c - h, c), QPointF(c + h, c))
+    p.drawLine(QPointF(c, c - h), QPointF(c, c + h))
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(color)
+    p.drawEllipse(QPointF(c, c), size * 0.09, size * 0.09)
+    p.end()
+    return QIcon(pix)
+
+
+def _icon_region(size: int = _ICON_SZ) -> QIcon:
+    pix = QPixmap(size, size)
+    pix.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pix)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    c = size / 2.0
+    n, r = 5, size * 0.40
+    pen = QPen(QColor(255, 155, 35), size * 0.10)
+    pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+    p.setPen(pen)
+    p.setBrush(QColor(255, 155, 35, 50))
+    path = QPainterPath()
+    for i in range(n):
+        a = math.radians(-90 + i * 360.0 / n)
+        x, y = c + r * math.cos(a), c + r * math.sin(a)
+        path.moveTo(x, y) if i == 0 else path.lineTo(x, y)
+    path.closeSubpath()
+    p.drawPath(path)
+    p.end()
+    return QIcon(pix)
+
+
+def _icon_select(size: int = _ICON_SZ) -> QIcon:
+    pix = QPixmap(size, size)
+    pix.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pix)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    color = QColor(175, 105, 255)
+    p.setPen(QPen(QColor(120, 55, 200), size * 0.06))
+    p.setBrush(color)
+    m, s = size * 0.10, size * 0.80
+    path = QPainterPath()
+    path.moveTo(m, m)
+    path.lineTo(m, m + s * 0.64)
+    path.lineTo(m + s * 0.24, m + s * 0.44)
+    path.lineTo(m + s * 0.48, m + s * 0.78)
+    path.lineTo(m + s * 0.62, m + s * 0.70)
+    path.lineTo(m + s * 0.38, m + s * 0.36)
+    path.lineTo(m + s * 0.52, m)
+    path.closeSubpath()
+    p.drawPath(path)
+    p.end()
+    return QIcon(pix)
+
+
+def _icon_eye(size: int = _ICON_SZ) -> QIcon:
+    pix = QPixmap(size, size)
+    pix.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pix)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    c = size / 2.0
+    color = QColor(20, 220, 195)
+    pen = QPen(color, size * 0.10)
+    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+    p.setPen(pen)
+    p.setBrush(Qt.BrushStyle.NoBrush)
+    rx, ry = size * 0.42, size * 0.24
+    path = QPainterPath()
+    path.moveTo(c - rx, c)
+    path.cubicTo(c - rx * 0.4, c - ry * 2.2, c + rx * 0.4, c - ry * 2.2, c + rx, c)
+    path.cubicTo(c + rx * 0.4, c + ry * 2.2, c - rx * 0.4, c + ry * 2.2, c - rx, c)
+    p.drawPath(path)
+    p.setPen(QPen(color, size * 0.07))
+    p.setBrush(QColor(20, 220, 195, 70))
+    p.drawEllipse(QPointF(c, c), size * 0.16, size * 0.16)
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(color)
+    p.drawEllipse(QPointF(c, c), size * 0.07, size * 0.07)
+    p.end()
+    return QIcon(pix)
+
+
+def _icon_quit(size: int = _ICON_SZ) -> QIcon:
+    pix = QPixmap(size, size)
+    pix.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pix)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    pen = QPen(QColor(255, 75, 75), size * 0.17)
+    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+    p.setPen(pen)
+    m = size * 0.20
+    p.drawLine(QPointF(m, m), QPointF(size - m, size - m))
+    p.drawLine(QPointF(size - m, m), QPointF(m, size - m))
+    p.end()
+    return QIcon(pix)
+
+
+def _make_tool_btn(icon: QIcon, tooltip: str, checkable: bool = True) -> QToolButton:
     btn = QToolButton()
-    btn.setText(text)
+    btn.setIcon(icon)
+    btn.setIconSize(QSize(_ICON_SZ, _ICON_SZ))
     btn.setToolTip(tooltip)
     btn.setCheckable(checkable)
-    btn.setFixedSize(32, 32)
+    btn.setFixedSize(_BTN_SZ, _BTN_SZ)
     btn.setStyleSheet(
-        "QToolButton { background: #2a2a2a; color: #ccc; border: 1px solid #444; "
-        "border-radius: 4px; font-size: 13px; }"
-        "QToolButton:checked { background: #3a5a8a; border: 1px solid #5af; }"
-        "QToolButton:hover { background: #353535; }"
+        "QToolButton { background: #252525; border: 1px solid #3a3a3a; border-radius: 6px; }"
+        "QToolButton:checked { background: #1e3a5f; border: 1px solid #4a9eff; }"
+        "QToolButton:hover { background: #2e2e2e; border: 1px solid #555; }"
     )
     return btn
 
 
 class AnnotationToolbar(QToolBar):
-    tool_changed = Signal(str)           # tool name
-    annotations_toggled = Signal(bool)   # visible
+    tool_changed = Signal(str)
+    annotations_toggled = Signal(bool)
     quit_requested = Signal()
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.setMovable(False)
         self.setStyleSheet(
-            "QToolBar { background: #1a1a1a; border-bottom: 1px solid #333; spacing: 4px; }"
+            "QToolBar { background: #1a1a1a; border-bottom: 1px solid #333; spacing: 5px; }"
         )
         self._active_channel_name = ""
         self._build()
 
     def _build(self) -> None:
-        self._pan_btn = _make_icon_button("⊕", "Pan (hold middle mouse in any mode)")
-        self._marker_btn = _make_icon_button("●", "Cell Marker: click to place")
-        self._region_btn = _make_icon_button("⬠", "Region: drag to draw freehand")
-        self._select_btn = _make_icon_button("↖", "Select: click / drag to move / D to delete")
-        self._eye_btn = _make_icon_button("◎", "Toggle annotation visibility", checkable=True)
+        self._pan_btn = _make_tool_btn(_icon_pan(), "Pan  [right-click drag in any mode]")
+        self._marker_btn = _make_tool_btn(_icon_marker(), "Cell Marker: click to place")
+        self._region_btn = _make_tool_btn(_icon_region(), "Region: drag to draw freehand")
+        self._select_btn = _make_tool_btn(_icon_select(), "Select: click/drag to move · D to delete")
+        self._eye_btn = _make_tool_btn(_icon_eye(), "Toggle annotations [Space]", checkable=True)
         self._eye_btn.setChecked(True)
 
         for btn in (self._pan_btn, self._marker_btn, self._region_btn, self._select_btn):
@@ -60,7 +202,6 @@ class AnnotationToolbar(QToolBar):
         self._channel_lbl.setStyleSheet("color: #aaa; font-size: 12px; padding: 0 6px;")
         self.addWidget(self._channel_lbl)
 
-        # Wire buttons into exclusive group manually
         self._tool_buttons = {
             "pan": self._pan_btn,
             "cell_marker": self._marker_btn,
@@ -72,21 +213,18 @@ class AnnotationToolbar(QToolBar):
 
         self._eye_btn.toggled.connect(self.annotations_toggled)
 
-        # Spacer pushes quit button to the far right
         spacer = QWidget()
         spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         self.addWidget(spacer)
 
-        self._quit_btn = _make_icon_button("✕", "Quit", checkable=False)
+        self._quit_btn = _make_tool_btn(_icon_quit(), "Quit", checkable=False)
         self._quit_btn.setStyleSheet(
-            "QToolButton { background: #2a2a2a; color: #f77; border: 1px solid #444; "
-            "border-radius: 4px; font-size: 13px; }"
-            "QToolButton:hover { background: #5a1a1a; color: #faa; border: 1px solid #f55; }"
+            "QToolButton { background: #252525; border: 1px solid #3a3a3a; border-radius: 6px; }"
+            "QToolButton:hover { background: #5a1515; border: 1px solid #f44; }"
         )
         self._quit_btn.clicked.connect(self.quit_requested)
         self.addWidget(self._quit_btn)
 
-        # Select pan by default
         self._pan_btn.setChecked(True)
 
     def _on_tool_clicked(self, name: str) -> None:
@@ -97,3 +235,6 @@ class AnnotationToolbar(QToolBar):
     def set_active_channel(self, name: str) -> None:
         self._active_channel_name = name
         self._channel_lbl.setText(f"Channel: {name}" if name else "Channel: —")
+
+    def toggle_annotations_visibility(self) -> None:
+        self._eye_btn.setChecked(not self._eye_btn.isChecked())

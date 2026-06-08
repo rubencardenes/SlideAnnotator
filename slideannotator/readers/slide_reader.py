@@ -153,6 +153,38 @@ class OmeTifSlideReader(ImageReaderOmeTif):
                 best = i
         return best
 
+    def read_region(self, level: int, x: int, y: int, w: int, h: int) -> np.ndarray:
+        """Return (C, h, w) uint16 for the requested region at the given level."""
+        lw, lh = self.level_dimensions[level]
+        x = max(0, x)
+        y = max(0, y)
+        actual_w = min(w, lw - x)
+        actual_h = min(h, lh - y)
+
+        if actual_w <= 0 or actual_h <= 0:
+            return np.zeros((len(self.channels), h, w), dtype=np.uint16)
+
+        arrays: list[np.ndarray] = []
+        for i in range(len(self.channels)):
+            img = self._tile_images.get((i, level))
+            if img is None:
+                arrays.append(np.zeros((h, w), dtype=np.uint16))
+                continue
+            region = img.extract_area(x, y, actual_w, actual_h)
+            raw = np.ndarray(
+                shape=(region.height, region.width, region.bands),
+                dtype=self._vips_dtype(region.format),
+                buffer=region.write_to_memory(),
+            ).copy()
+            ch_arr = raw[:, :, 0] if raw.ndim == 3 else raw
+            if actual_w < w or actual_h < h:
+                padded = np.zeros((h, w), dtype=np.uint16)
+                padded[:actual_h, :actual_w] = ch_arr
+                ch_arr = padded
+            arrays.append(ch_arr.astype(np.uint16) if ch_arr.dtype != np.uint16 else ch_arr)
+
+        return np.stack(arrays)
+
     def close(self) -> None:
         self._tile_images.clear()
 

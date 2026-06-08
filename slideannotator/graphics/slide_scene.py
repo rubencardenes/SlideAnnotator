@@ -4,11 +4,12 @@ from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import QColor, QPolygonF, QPixmap
 from PySide6.QtWidgets import QGraphicsScene
 
-from ..annotations.models import AnnotationStore, CellMarker, RegionAnnotation
+from ..annotations.models import AnnotationStore, CellMarker, FOVAnnotation, RegionAnnotation
 from ..compositing.compositor import ChannelSettings
 from ..tiles.tile_cache import TileKey
 from ..tiles.tile_manager import TileManager
 from .cell_marker_item import CellMarkerItem
+from .fov_item import FOVItem
 from .region_item import RegionItem
 from .tile_item import TileItem
 
@@ -28,6 +29,7 @@ class SlideScene(QGraphicsScene):
         self._tile_items: dict[TileKey, TileItem] = {}
         self._marker_items: dict[str, CellMarkerItem] = {}
         self._region_items: dict[str, RegionItem] = {}
+        self._fov_items: dict[str, FOVItem] = {}
         self._annotations_visible = True
 
         self._current_viewport: QRectF | None = None
@@ -50,6 +52,7 @@ class SlideScene(QGraphicsScene):
         self._tile_items.clear()
         self._marker_items.clear()
         self._region_items.clear()
+        self._fov_items.clear()
         self._current_level = 0
         self._thumbnail_item = None
         w, h = reader.dimensions
@@ -86,6 +89,8 @@ class SlideScene(QGraphicsScene):
             item.setVisible(visible)
         for item in self._region_items.values():
             item.setVisible(visible)
+        for item in self._fov_items.values():
+            item.setVisible(visible)
 
     # ------------------------------------------------------------------
     def on_tile_ready(self, key: TileKey, qimage) -> None:
@@ -112,6 +117,8 @@ class SlideScene(QGraphicsScene):
             self._add_marker_item(ann)
         elif isinstance(ann, RegionAnnotation):
             self._add_region_item(ann)
+        elif isinstance(ann, FOVAnnotation):
+            self._add_fov_item(ann)
 
     def _add_marker_item(self, ann: CellMarker) -> None:
         color = self._channel_color(ann.channel)
@@ -133,11 +140,14 @@ class SlideScene(QGraphicsScene):
         self._region_items[ann.id] = item
         self.addItem(item)
 
+    def _add_fov_item(self, ann: FOVAnnotation) -> None:
+        item = FOVItem(ann.id, ann.x, ann.y, ann.w, ann.h)
+        item.setVisible(self._annotations_visible)
+        self._fov_items[ann.id] = item
+        self.addItem(item)
+
     def _on_annotation_removed(self, ann_id: str) -> None:
-        for store, items in (
-            (self._marker_items, self._marker_items),
-            (self._region_items, self._region_items),
-        ):
+        for items in (self._marker_items, self._region_items, self._fov_items):
             if ann_id in items:
                 self.removeItem(items.pop(ann_id))
                 return
@@ -152,6 +162,8 @@ class SlideScene(QGraphicsScene):
         for ann_id, item in self._marker_items.items():
             item.set_selected(ann_id in selected_set)
         for ann_id, item in self._region_items.items():
+            item.set_selected(ann_id in selected_set)
+        for ann_id, item in self._fov_items.items():
             item.set_selected(ann_id in selected_set)
 
     # ------------------------------------------------------------------

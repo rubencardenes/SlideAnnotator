@@ -16,6 +16,7 @@ def main() -> None:
         datefmt="%H:%M:%S",
         stream=sys.stdout,
     )
+    logging.getLogger("pyvips").setLevel(logging.WARNING)
 
     app = QApplication.instance() or QApplication(sys.argv)
     app.setApplicationName("SlideAnnotator")

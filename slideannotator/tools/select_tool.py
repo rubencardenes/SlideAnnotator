@@ -4,6 +4,7 @@ from PySide6.QtCore import QPointF, Qt
 from PySide6.QtGui import QKeyEvent, QMouseEvent
 
 from ..graphics.cell_marker_item import CellMarkerItem, HALO_EXTRA, SCREEN_RADIUS
+from ..graphics.fov_item import FOVItem
 from ..graphics.region_item import RegionItem
 from .base_tool import BaseTool
 
@@ -84,7 +85,7 @@ class SelectTool(BaseTool):
         if best_id is not None:
             return best_id
 
-        # For regions: shape-based intersection is fine
+        # For regions and FOVs: shape-based intersection is fine
         vt = self._view.viewport_transform()
         items = self._scene.items(
             scene_pos,
@@ -93,6 +94,6 @@ class SelectTool(BaseTool):
             vt,
         )
         for item in items:
-            if isinstance(item, RegionItem):
+            if isinstance(item, (RegionItem, FOVItem)):
                 return item.ann_id
         return None

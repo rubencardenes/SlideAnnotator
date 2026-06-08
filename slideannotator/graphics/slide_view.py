@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, QPointF
+from PySide6.QtCore import Qt, QPointF, Signal
 from PySide6.QtGui import QTransform
 from PySide6.QtWidgets import QGraphicsView
 
@@ -11,6 +11,9 @@ class SlideView(QGraphicsView):
     ZOOM_FACTOR = 1.15
     MIN_ZOOM = 0.002
     MAX_ZOOM = 40.0
+
+    fov_requested = Signal(object)   # QPointF scene position
+    space_pressed = Signal()
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -26,12 +29,14 @@ class SlideView(QGraphicsView):
         self.setRenderHint(self.renderHints())
         self.setBackgroundRole(self.backgroundRole())
         self.setStyleSheet("background: #1a1a1a;")
+        self.setContextMenuPolicy(Qt.ContextMenuPolicy.NoContextMenu)
 
         self._tool = None
         self._panning = False
         self._pan_start = None
         self._pan_hbar = 0
         self._pan_vbar = 0
+        self._last_scene_pos = QPointF(0, 0)
 
     # ------------------------------------------------------------------
     def set_tool(self, tool) -> None:
@@ -64,7 +69,7 @@ class SlideView(QGraphicsView):
         event.accept()
 
     def mousePressEvent(self, event) -> None:
-        if event.button() == Qt.MouseButton.MiddleButton:
+        if event.button() == Qt.MouseButton.RightButton:
             self._panning = True
             self._pan_start = event.position().toPoint()
             self._pan_hbar = self.horizontalScrollBar().value()
@@ -83,6 +88,8 @@ class SlideView(QGraphicsView):
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event) -> None:
+        self._last_scene_pos = self.mapToScene(event.position().toPoint())
+
         if self._panning:
             delta = event.position().toPoint() - self._pan_start
             self.horizontalScrollBar().setValue(self._pan_hbar - delta.x())
@@ -91,13 +98,12 @@ class SlideView(QGraphicsView):
             return
 
         if self._tool:
-            scene_pos = self.mapToScene(event.position().toPoint())
-            self._tool.mouse_move(event, scene_pos)
+            self._tool.mouse_move(event, self._last_scene_pos)
 
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event) -> None:
-        if event.button() == Qt.MouseButton.MiddleButton and self._panning:
+        if event.button() == Qt.MouseButton.RightButton and self._panning:
             self._panning = False
             if self._tool and not getattr(self._tool, "is_pan", False):
                 self.setCursor(Qt.CursorShape.CrossCursor)
@@ -116,6 +122,14 @@ class SlideView(QGraphicsView):
         super().mouseReleaseEvent(event)
 
     def keyPressEvent(self, event) -> None:
+        if event.key() == Qt.Key.Key_F:
+            self.fov_requested.emit(QPointF(self._last_scene_pos))
+            event.accept()
+            return
+        if event.key() == Qt.Key.Key_Space:
+            self.space_pressed.emit()
+            event.accept()
+            return
         if self._tool:
             self._tool.key_press(event)
         super().keyPressEvent(event)
