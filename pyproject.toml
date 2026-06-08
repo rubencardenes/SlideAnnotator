@@ -1,0 +1,18 @@
+[project]
+name = "slideannotator"
+version = "0.1.0"
+description = "Histological slide annotation tool for mIF images"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "PySide6>=6.6.0",
+    "pyvips>=2.2.0",
+    "numpy>=1.26.0",
+]
+
+[project.scripts]
+slideannotator = "slideannotator.app:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
