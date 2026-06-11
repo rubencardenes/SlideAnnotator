@@ -159,7 +159,7 @@ class MainWindow(QMainWindow):
             self,
             "Open Image",
             "",
-            "Slide Images (*.tif *.tiff *.svs *.ndpi *.scn *.qptiff *.czi);;All Files (*)",
+            "Slide Images (*.tif *.tiff *.svs *.ndpi *.scn *.qptiff *.czi *.ims);;All Files (*)",
         )
         if path:
             self.open_image(Path(path))
