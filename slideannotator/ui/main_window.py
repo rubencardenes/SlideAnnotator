@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from ..annotations.database import AnnotationDB
 from ..annotations.models import AnnotationStore
 from ..inference.stardist import StarDistONNX
 from ..inference.stardist_worker import StarDistWorker
@@ -55,6 +56,7 @@ class MainWindow(QMainWindow):
         self._stardist_model: StarDistONNX | None = None
         self._stardist_outline_color = None   # persists across image loads
         self._stardist_outline_width = None
+        self._db: AnnotationDB | None = None
 
         self._thread_pool = QThreadPool.globalInstance()
         self._thread_pool.setMaxThreadCount(4)
@@ -79,8 +81,8 @@ class MainWindow(QMainWindow):
         self._toolbar.tool_changed.connect(self._on_tool_changed)
         self._toolbar.annotations_toggled.connect(self._on_annotations_toggled)
         self._toolbar.marker_box_toggled.connect(self._on_marker_box_toggled)
-        self._toolbar.save_requested.connect(self._save_structured)
-        self._toolbar.load_requested.connect(self._load_annotations)
+        self._toolbar.save_requested.connect(self._save_to_db)
+        self._toolbar.load_requested.connect(self._load_from_db)
         self._toolbar.summary_requested.connect(self._show_summary)
         self._toolbar.run_stardist_requested.connect(self._run_stardist)
         self._toolbar.stardist_toggled.connect(self._on_stardist_toggled)
@@ -136,10 +138,20 @@ class MainWindow(QMainWindow):
 
         self._save_action = file_menu.addAction("&Save Annotations")
         self._save_action.setShortcut("Ctrl+S")
-        self._save_action.triggered.connect(self._save_structured)
+        self._save_action.triggered.connect(self._save_to_db)
         self._save_action.setEnabled(False)
 
-        self._export_action = file_menu.addAction("&Export Cell Markers (txt)…")
+        self._load_action = file_menu.addAction("&Load Annotations")
+        self._load_action.setShortcut("Ctrl+L")
+        self._load_action.triggered.connect(self._load_from_db)
+        self._load_action.setEnabled(False)
+
+        self._export_annot_action = file_menu.addAction("&Export Annotations…")
+        self._export_annot_action.setShortcut("Ctrl+Shift+E")
+        self._export_annot_action.triggered.connect(self._export_annotations)
+        self._export_annot_action.setEnabled(False)
+
+        self._export_action = file_menu.addAction("Export Cell Markers (&txt)…")
         self._export_action.setShortcut("Ctrl+E")
         self._export_action.triggered.connect(self._export_markers)
         self._export_action.setEnabled(False)
@@ -246,6 +258,8 @@ class MainWindow(QMainWindow):
             self._view.fov_requested.connect(self._on_fov_requested)
 
             self._save_action.setEnabled(True)
+            self._load_action.setEnabled(True)
+            self._export_annot_action.setEnabled(True)
             self._export_action.setEnabled(True)
             self._save_fov_action.setEnabled(True)
             self._toolbar.set_save_load_enabled(True)
@@ -287,7 +301,40 @@ class MainWindow(QMainWindow):
             return
         save_view_settings(self._slide_path, self._reader.channels, self._channel_settings)
 
-    def _save_structured(self) -> None:
+    def _get_db(self) -> AnnotationDB:
+        if self._db is None:
+            self._db = AnnotationDB(get_settings().db_path)
+        return self._db
+
+    def _save_to_db(self) -> None:
+        if self._store is None or self._slide_path is None:
+            return
+        count = self._get_db().save_all(self._store, self._slide_path.stem)
+        self._store.set_dirty(False)
+        QMessageBox.information(
+            self, "Annotations Saved",
+            f"Saved {count} annotation(s) to database."
+        )
+
+    def _load_from_db(self) -> None:
+        if self._store is None or self._slide_path is None:
+            return
+        count = self._get_db().load_for_slide(self._slide_path.stem, self._store)
+        scene = self._view.scene()
+        if isinstance(scene, SlideScene):
+            scene.sync_from_store()
+        if count > 0:
+            QMessageBox.information(
+                self, "Annotations Loaded",
+                f"Loaded {count} annotation(s) from database."
+            )
+        else:
+            QMessageBox.information(
+                self, "No Annotations Found",
+                "No saved annotations found for this image."
+            )
+
+    def _export_annotations(self) -> None:
         if self._store is None or self._slide_path is None or self._reader is None:
             return
         output_dir = get_settings().annotations_dir
@@ -295,30 +342,10 @@ class MainWindow(QMainWindow):
         saved, errors = export_structured(
             output_dir, self._slide_path, self._store, self._reader
         )
-        self._store.set_dirty(False)
-        msg = f"Saved to:\n{output_dir}\n\n{saved} file(s) written."
+        msg = f"Exported to:\n{output_dir}\n\n{saved} file(s) written."
         if errors:
             msg += f"\n({errors} error(s))"
-        QMessageBox.information(self, "Annotations Saved", msg)
-
-    def _load_annotations(self) -> None:
-        if self._store is None or self._slide_path is None:
-            return
-        output_dir = get_settings().annotations_dir
-        count = load_structured(output_dir, self._slide_path, self._store)
-        scene = self._view.scene()
-        if isinstance(scene, SlideScene):
-            scene.sync_from_store()
-        if count > 0:
-            QMessageBox.information(
-                self, "Annotations Loaded",
-                f"Loaded {count} annotation(s) from:\n{output_dir}"
-            )
-        else:
-            QMessageBox.information(
-                self, "No Annotations Found",
-                "No saved annotations found for this image."
-            )
+        QMessageBox.information(self, "Annotations Exported", msg)
 
     def _show_summary(self) -> None:
         dlg = SummaryDialog(parent=self)
@@ -552,7 +579,7 @@ class MainWindow(QMainWindow):
             | QMessageBox.StandardButton.Cancel,
         )
         if reply == QMessageBox.StandardButton.Save:
-            self._save_structured()
+            self._save_to_db()
             return True
         if reply == QMessageBox.StandardButton.Discard:
             return True
@@ -568,4 +595,6 @@ class MainWindow(QMainWindow):
         self._thread_pool.waitForDone(3000)
         if self._reader:
             self._reader.close()
+        if self._db:
+            self._db.close()
         event.accept()

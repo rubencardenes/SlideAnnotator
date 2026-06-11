@@ -1,2 +1,3 @@
 annotations_dir: ~/data/annotations
 stardist_model: ~/data/models/stardist-versatile-fluo_dynamic.onnx
+db_path: ~/data/annotations/annotations.db

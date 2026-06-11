@@ -19,6 +19,7 @@ _DEFAULTS = {
 class Settings:
     annotations_dir: Path = field(default_factory=lambda: Path.home() / "data" / "annotations")
     stardist_model: Path | None = field(default=None)
+    db_path: Path = field(default_factory=lambda: Path("annotations.db"))
 
     @staticmethod
     def from_dict(data: dict) -> "Settings":
@@ -27,6 +28,8 @@ class Settings:
             s.annotations_dir = Path(data["annotations_dir"]).expanduser()
         if "stardist_model" in data:
             s.stardist_model = Path(data["stardist_model"]).expanduser()
+        if "db_path" in data:
+            s.db_path = Path(data["db_path"]).expanduser()
         return s
 
 

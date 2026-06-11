@@ -1,11 +1,24 @@
 from __future__ import annotations
 
+import getpass
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+from datetime import datetime, timezone
 
 from PySide6.QtCore import QObject, Signal
 
 MARKER_BOX_HALF = 10  # half-side of the bounding box saved in txt export (scene pixels)
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _current_user() -> str:
+    try:
+        return getpass.getuser()
+    except Exception:
+        return "unknown"
 
 
 @dataclass
@@ -14,6 +27,13 @@ class CellMarker:
     x: float
     y: float
     channel: str
+    w: float = 10.0
+    h: float = 10.0
+    color: tuple[int, int, int] = field(default_factory=lambda: (255, 255, 255))
+    created_at: str = field(default_factory=_now_iso)
+    modified_at: str = field(default_factory=_now_iso)
+    created_by: str = field(default_factory=_current_user)
+    slide_name: str = ""
     type: str = "cell_marker"
 
     @staticmethod
@@ -26,6 +46,11 @@ class RegionAnnotation:
     id: str
     points: list[tuple[float, float]]
     channel: str
+    color: tuple[int, int, int] = field(default_factory=lambda: (255, 255, 255))
+    created_at: str = field(default_factory=_now_iso)
+    modified_at: str = field(default_factory=_now_iso)
+    created_by: str = field(default_factory=_current_user)
+    slide_name: str = ""
     type: str = "region"
 
     @staticmethod
@@ -44,6 +69,11 @@ class FOVAnnotation:
     y: float  # top-left y
     w: float = 512.0
     h: float = 512.0
+    color: tuple[int, int, int] = field(default_factory=lambda: (255, 255, 255))
+    created_at: str = field(default_factory=_now_iso)
+    modified_at: str = field(default_factory=_now_iso)
+    created_by: str = field(default_factory=_current_user)
+    slide_name: str = ""
     type: str = "fov"
 
     @staticmethod
@@ -54,10 +84,8 @@ class FOVAnnotation:
 def _snapshot_ann(ann: "CellMarker | RegionAnnotation | FOVAnnotation"):
     """Return a copy of an annotation for undo history."""
     if isinstance(ann, RegionAnnotation):
-        return RegionAnnotation(id=ann.id, points=list(ann.points), channel=ann.channel)
-    if isinstance(ann, CellMarker):
-        return CellMarker(id=ann.id, x=ann.x, y=ann.y, channel=ann.channel)
-    return FOVAnnotation(id=ann.id, x=ann.x, y=ann.y, w=ann.w, h=ann.h)
+        return replace(ann, points=list(ann.points))
+    return replace(ann)
 
 
 class AnnotationStore(QObject):
@@ -308,6 +336,16 @@ class AnnotationStore(QObject):
         elif isinstance(ann, FOVAnnotation):
             self._fovs[ann.id] = ann
         self.is_dirty = True
+        self.annotation_added.emit(ann.id)
+
+    def _load_annotation(self, ann: "CellMarker | RegionAnnotation | FOVAnnotation") -> None:
+        """Insert a pre-built annotation (used by deserialization; bypasses undo stack)."""
+        if isinstance(ann, CellMarker):
+            self._markers[ann.id] = ann
+        elif isinstance(ann, RegionAnnotation):
+            self._regions[ann.id] = ann
+        elif isinstance(ann, FOVAnnotation):
+            self._fovs[ann.id] = ann
         self.annotation_added.emit(ann.id)
 
     def _apply_move(self, ann_id: str, state: tuple) -> None:
