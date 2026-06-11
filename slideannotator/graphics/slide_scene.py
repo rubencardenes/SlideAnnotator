@@ -31,6 +31,7 @@ class SlideScene(QGraphicsScene):
         self._region_items: dict[str, RegionItem] = {}
         self._fov_items: dict[str, FOVItem] = {}
         self._annotations_visible = True
+        self._marker_show_box = False
 
         self._current_viewport: QRectF | None = None
         self._current_zoom: float = 1.0
@@ -83,6 +84,21 @@ class SlideScene(QGraphicsScene):
             self._thumbnail_item = None
         self._setup_thumbnail()
 
+    def sync_from_store(self) -> None:
+        """Create scene items for any store annotations that don't have one yet."""
+        for ann in self._store.all_annotations():
+            if isinstance(ann, CellMarker) and ann.id not in self._marker_items:
+                self._add_marker_item(ann)
+            elif isinstance(ann, RegionAnnotation) and ann.id not in self._region_items:
+                self._add_region_item(ann)
+            elif isinstance(ann, FOVAnnotation) and ann.id not in self._fov_items:
+                self._add_fov_item(ann)
+
+    def set_marker_show_box(self, show: bool) -> None:
+        self._marker_show_box = show
+        for item in self._marker_items.values():
+            item.set_show_box(show)
+
     def set_annotations_visible(self, visible: bool) -> None:
         self._annotations_visible = visible
         for item in self._marker_items.values():
@@ -124,6 +140,7 @@ class SlideScene(QGraphicsScene):
         color = self._channel_color(ann.channel)
         item = CellMarkerItem(ann.id, color)
         item.setPos(ann.x, ann.y)
+        item.set_show_box(self._marker_show_box)
         item.setVisible(self._annotations_visible)
         self._marker_items[ann.id] = item
         self.addItem(item)
@@ -156,6 +173,18 @@ class SlideScene(QGraphicsScene):
         ann = self._store.get_marker(ann_id)
         if ann and ann_id in self._marker_items:
             self._marker_items[ann_id].setPos(ann.x, ann.y)
+            return
+        fov = self._store.get_fov(ann_id)
+        if fov and ann_id in self._fov_items:
+            self._fov_items[ann_id].setRect(fov.x, fov.y, fov.w, fov.h)
+            return
+        region = self._store.get_region(ann_id)
+        if region and ann_id in self._region_items:
+            from PySide6.QtCore import QPointF
+            polygon = QPolygonF()
+            for x, y in region.points:
+                polygon.append(QPointF(x, y))
+            self._region_items[ann_id].setPolygon(polygon)
 
     def _on_selection_changed(self, selected: object) -> None:
         selected_set = set(selected) if selected else set()

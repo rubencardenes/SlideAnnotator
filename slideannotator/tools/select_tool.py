@@ -15,12 +15,14 @@ class SelectTool(BaseTool):
         self._view = view
         self._dragging = False
         self._drag_id: str | None = None
+        self._drag_type: str | None = None  # "marker" or "fov"
         self._drag_start: QPointF | None = None
         self._original_pos: tuple[float, float] | None = None
 
     def deactivate(self) -> None:
         self._dragging = False
         self._drag_id = None
+        self._drag_type = None
         self._store.set_selected(set())
 
     # ------------------------------------------------------------------
@@ -40,24 +42,37 @@ class SelectTool(BaseTool):
             if ann_id not in self._store.selected:
                 self._store.set_selected({ann_id})
 
-        # Start drag only for markers
         marker = self._store.get_marker(ann_id)
         if marker is not None:
             self._dragging = True
             self._drag_id = ann_id
+            self._drag_type = "marker"
             self._drag_start = QPointF(scene_pos)
             self._original_pos = (marker.x, marker.y)
+            return
+
+        fov = self._store.get_fov(ann_id)
+        if fov is not None:
+            self._dragging = True
+            self._drag_id = ann_id
+            self._drag_type = "fov"
+            self._drag_start = QPointF(scene_pos)
+            self._original_pos = (fov.x, fov.y)
 
     def mouse_move(self, event: QMouseEvent, scene_pos: QPointF) -> None:
         if not self._dragging or self._drag_id is None:
             return
         delta = scene_pos - self._drag_start
         ox, oy = self._original_pos
-        self._store.move_marker(self._drag_id, ox + delta.x(), oy + delta.y())
+        if self._drag_type == "marker":
+            self._store.move_marker(self._drag_id, ox + delta.x(), oy + delta.y())
+        elif self._drag_type == "fov":
+            self._store.move_fov(self._drag_id, ox + delta.x(), oy + delta.y())
 
     def mouse_release(self, event: QMouseEvent, scene_pos: QPointF) -> None:
         self._dragging = False
         self._drag_id = None
+        self._drag_type = None
 
     def key_press(self, event: QKeyEvent) -> None:
         if event.key() in (Qt.Key.Key_D, Qt.Key.Key_Delete, Qt.Key.Key_Backspace):

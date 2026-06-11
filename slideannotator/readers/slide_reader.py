@@ -136,7 +136,7 @@ class OmeTifSlideReader(ImageReaderOmeTif):
         return raw.astype(np.uint16) if raw.dtype != np.uint16 else raw.copy()
 
     def compute_channel_quantiles(
-        self, level: int, q_low: float = 0.02, q_high: float = 0.98
+        self, level: int, q_low: float = 0.001, q_high: float = 0.999
     ) -> list[tuple[float, float]]:
         results: list[tuple[float, float]] = []
         for c in range(len(self.channels)):

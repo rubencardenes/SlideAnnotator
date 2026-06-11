@@ -4,7 +4,7 @@ from pathlib import Path
 
 import numpy as np
 
-from PySide6.QtCore import Qt, QThreadPool
+from PySide6.QtCore import Qt, QThreadPool, QTimer
 from PySide6.QtGui import QImage
 from PySide6.QtWidgets import (
     QFileDialog,
@@ -16,7 +16,9 @@ from PySide6.QtWidgets import (
 )
 
 from ..annotations.models import AnnotationStore
-from ..annotations.serializer import export_markers_txt, load_annotations, save_annotations
+from ..settings import get_settings
+from ..viewsettings import load_view_settings, save_view_settings
+from ..annotations.serializer import export_markers_txt, export_structured, load_structured
 from ..compositing.compositor import ChannelSettings
 from ..graphics.slide_scene import SlideScene
 from ..graphics.slide_view import SlideView
@@ -50,6 +52,11 @@ class MainWindow(QMainWindow):
         self._thread_pool = QThreadPool.globalInstance()
         self._thread_pool.setMaxThreadCount(4)
 
+        self._view_settings_timer = QTimer(self)
+        self._view_settings_timer.setSingleShot(True)
+        self._view_settings_timer.setInterval(1000)
+        self._view_settings_timer.timeout.connect(self._save_view_settings)
+
         self._build_ui()
         self._build_menus()
 
@@ -64,6 +71,9 @@ class MainWindow(QMainWindow):
         self._toolbar = AnnotationToolbar(self)
         self._toolbar.tool_changed.connect(self._on_tool_changed)
         self._toolbar.annotations_toggled.connect(self._on_annotations_toggled)
+        self._toolbar.marker_box_toggled.connect(self._on_marker_box_toggled)
+        self._toolbar.save_requested.connect(self._save_structured)
+        self._toolbar.load_requested.connect(self._load_annotations)
         self._toolbar.quit_requested.connect(self.close)
         self.addToolBar(self._toolbar)
 
@@ -81,6 +91,7 @@ class MainWindow(QMainWindow):
 
         self._view = SlideView()
         self._view.space_pressed.connect(self._toggle_annotations)
+        self._view.b_pressed.connect(self._toggle_marker_boxes)
         splitter.addWidget(self._channel_panel)
         splitter.addWidget(self._view)
         splitter.setSizes([230, 1170])
@@ -102,7 +113,7 @@ class MainWindow(QMainWindow):
 
         self._save_action = file_menu.addAction("&Save Annotations")
         self._save_action.setShortcut("Ctrl+S")
-        self._save_action.triggered.connect(self._save_annotations)
+        self._save_action.triggered.connect(self._save_structured)
         self._save_action.setEnabled(False)
 
         self._export_action = file_menu.addAction("&Export Cell Markers (txt)…")
@@ -148,13 +159,14 @@ class MainWindow(QMainWindow):
 
             self._channel_settings = [
                 ChannelSettings(
-                    visible=True,
+                    visible=i < 10,
                     color=ch.color,
                     min_val=quantiles[i][0],
                     max_val=quantiles[i][1],
                 )
                 for i, ch in enumerate(self._reader.channels)
             ]
+            load_view_settings(path, self._reader.channels, self._channel_settings)
 
             # Annotation store
             self._store = AnnotationStore()
@@ -200,27 +212,14 @@ class MainWindow(QMainWindow):
             # Connect FOV creation from view key shortcut
             self._view.fov_requested.connect(self._on_fov_requested)
 
-            # Load existing annotations if present
-            ann_path = path.with_suffix(path.suffix + ".annotations.json")
-            if ann_path.exists():
-                load_annotations(ann_path, self._store)
-
             self._save_action.setEnabled(True)
             self._export_action.setEnabled(True)
             self._save_fov_action.setEnabled(True)
+            self._toolbar.set_save_load_enabled(True)
             self.setWindowTitle(f"SlideAnnotator — {path.name}")
 
         except Exception as exc:
             QMessageBox.critical(self, "Error Opening Image", str(exc))
-
-    def _save_annotations(self) -> None:
-        if self._store is None or self._slide_path is None:
-            return
-        ann_path = self._slide_path.with_suffix(
-            self._slide_path.suffix + ".annotations.json"
-        )
-        save_annotations(ann_path, self._slide_path, self._store)
-        self._store.set_dirty(False)
 
     def _export_markers(self) -> None:
         if self._store is None or self._slide_path is None:
@@ -232,6 +231,44 @@ class MainWindow(QMainWindow):
         QMessageBox.information(
             self, "Export Complete", f"Markers exported to:\n{txt_path}"
         )
+
+    def _save_view_settings(self) -> None:
+        if self._slide_path is None or self._reader is None:
+            return
+        save_view_settings(self._slide_path, self._reader.channels, self._channel_settings)
+
+    def _save_structured(self) -> None:
+        if self._store is None or self._slide_path is None or self._reader is None:
+            return
+        output_dir = get_settings().annotations_dir
+        output_dir.mkdir(parents=True, exist_ok=True)
+        saved, errors = export_structured(
+            output_dir, self._slide_path, self._store, self._reader
+        )
+        self._store.set_dirty(False)
+        msg = f"Saved to:\n{output_dir}\n\n{saved} file(s) written."
+        if errors:
+            msg += f"\n({errors} error(s))"
+        QMessageBox.information(self, "Annotations Saved", msg)
+
+    def _load_annotations(self) -> None:
+        if self._store is None or self._slide_path is None:
+            return
+        output_dir = get_settings().annotations_dir
+        count = load_structured(output_dir, self._slide_path, self._store)
+        scene = self._view.scene()
+        if isinstance(scene, SlideScene):
+            scene.sync_from_store()
+        if count > 0:
+            QMessageBox.information(
+                self, "Annotations Loaded",
+                f"Loaded {count} annotation(s) from:\n{output_dir}"
+            )
+        else:
+            QMessageBox.information(
+                self, "No Annotations Found",
+                "No saved annotations found for this image."
+            )
 
     def _on_fov_requested(self, scene_pos) -> None:
         if self._store is None:
@@ -256,6 +293,7 @@ class MainWindow(QMainWindow):
         if index < len(self._channel_settings):
             self._channel_settings[index].visible = visible
             self._invalidate_tiles()
+            self._view_settings_timer.start()
 
     def _on_channel_color(self, index: int, color: tuple) -> None:
         if index < len(self._channel_settings):
@@ -267,6 +305,7 @@ class MainWindow(QMainWindow):
             self._channel_settings[index].min_val = min_val
             self._channel_settings[index].max_val = max_val
             self._invalidate_tiles()
+            self._view_settings_timer.start()
 
     def _on_active_channel(self, name: str) -> None:
         self._active_channel = name
@@ -287,8 +326,16 @@ class MainWindow(QMainWindow):
             zoom = self._view.current_zoom()
             scene.update_viewport(vr, zoom)
 
+    def _on_marker_box_toggled(self, show: bool) -> None:
+        scene = self._view.scene()
+        if isinstance(scene, SlideScene):
+            scene.set_marker_show_box(show)
+
     def _toggle_annotations(self) -> None:
         self._toolbar.toggle_annotations_visibility()
+
+    def _toggle_marker_boxes(self) -> None:
+        self._toolbar._box_btn.setChecked(not self._toolbar._box_btn.isChecked())
 
     def _save_fov_images(self) -> None:
         if self._store is None or self._slide_path is None or self._reader is None:
@@ -375,7 +422,7 @@ class MainWindow(QMainWindow):
             | QMessageBox.StandardButton.Cancel,
         )
         if reply == QMessageBox.StandardButton.Save:
-            self._save_annotations()
+            self._save_structured()
             return True
         if reply == QMessageBox.StandardButton.Discard:
             return True

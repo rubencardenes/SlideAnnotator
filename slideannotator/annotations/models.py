@@ -5,6 +5,8 @@ from dataclasses import dataclass, field
 
 from PySide6.QtCore import QObject, Signal
 
+MARKER_BOX_HALF = 10  # half-side of the bounding box saved in txt export (scene pixels)
+
 
 @dataclass
 class CellMarker:
@@ -124,6 +126,25 @@ class AnnotationStore(QObject):
     def get_marker(self, ann_id: str) -> CellMarker | None:
         return self._markers.get(ann_id)
 
+    def get_fov(self, ann_id: str) -> FOVAnnotation | None:
+        return self._fovs.get(ann_id)
+
+    def get_region(self, ann_id: str) -> RegionAnnotation | None:
+        return self._regions.get(ann_id)
+
+    def set_region_points(self, ann_id: str, points: list[tuple[float, float]]) -> None:
+        if ann_id in self._regions:
+            self._regions[ann_id].points = list(points)
+            self.is_dirty = True
+            self.annotation_moved.emit(ann_id)
+
+    def move_fov(self, ann_id: str, x: float, y: float) -> None:
+        if ann_id in self._fovs:
+            self._fovs[ann_id].x = x
+            self._fovs[ann_id].y = y
+            self.is_dirty = True
+            self.annotation_moved.emit(ann_id)
+
     def set_dirty(self, value: bool) -> None:
         self.is_dirty = value
 
@@ -142,6 +163,10 @@ class AnnotationStore(QObject):
     @property
     def fovs(self) -> dict[str, FOVAnnotation]:
         return self._fovs
+
+    def clear(self) -> None:
+        for ann_id in list(self._markers) + list(self._regions) + list(self._fovs):
+            self.delete(ann_id)
 
     def all_annotations(self) -> list[CellMarker | RegionAnnotation | FOVAnnotation]:
         return list(self._markers.values()) + list(self._regions.values()) + list(self._fovs.values())

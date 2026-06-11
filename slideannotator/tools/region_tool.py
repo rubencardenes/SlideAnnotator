@@ -7,26 +7,31 @@ from PySide6.QtGui import QBrush, QColor, QKeyEvent, QMouseEvent, QPen, QPolygon
 from PySide6.QtWidgets import QGraphicsPolygonItem
 
 from .base_tool import BaseTool
+from .shift_select_mixin import ShiftSelectMixin
 
 MIN_SCREEN_PX = 3.0
 
 
-class RegionTool(BaseTool):
+class RegionTool(ShiftSelectMixin, BaseTool):
     def __init__(self, scene, store, view) -> None:
         super().__init__(scene, store)
         self._view = view
         self._points: list[QPointF] = []
         self._preview: QGraphicsPolygonItem | None = None
         self._drawing = False
+        self._sx_init()
 
     def activate(self) -> None:
         self._cancel()
 
     def deactivate(self) -> None:
         self._cancel()
+        self._sx_deactivate()
 
     # ------------------------------------------------------------------
     def mouse_press(self, event: QMouseEvent, scene_pos: QPointF) -> None:
+        if self._sx_mouse_press(event, scene_pos):
+            return
         if not self._drawing:
             self._drawing = True
             self._points = [QPointF(scene_pos)]
@@ -40,12 +45,13 @@ class RegionTool(BaseTool):
             self._scene.addItem(self._preview)
 
     def mouse_move(self, event: QMouseEvent, scene_pos: QPointF) -> None:
+        if self._sx_mouse_move(event, scene_pos):
+            return
         if not self._drawing:
             return
         zoom = self._view.current_zoom()
         if zoom < 1e-9:
             return
-
         if self._points:
             last = self._points[-1]
             dx = (scene_pos.x() - last.x()) * zoom
@@ -55,6 +61,8 @@ class RegionTool(BaseTool):
                 self._update_preview()
 
     def mouse_release(self, event: QMouseEvent, scene_pos: QPointF) -> None:
+        if self._sx_mouse_release(event, scene_pos):
+            return
         if not self._drawing:
             return
         if len(self._points) >= 3:
@@ -64,7 +72,11 @@ class RegionTool(BaseTool):
 
     def key_press(self, event: QKeyEvent) -> None:
         if event.key() == Qt.Key.Key_Escape:
+            self._sx_cancel()
             self._cancel()
+            return
+        if self._sx_key_press(event):
+            return
 
     # ------------------------------------------------------------------
     def _update_preview(self) -> None:

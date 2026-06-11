@@ -14,6 +14,7 @@ class SlideView(QGraphicsView):
 
     fov_requested = Signal(object)   # QPointF scene position
     space_pressed = Signal()
+    b_pressed = Signal()
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -128,6 +129,10 @@ class SlideView(QGraphicsView):
             return
         if event.key() == Qt.Key.Key_Space:
             self.space_pressed.emit()
+            event.accept()
+            return
+        if event.key() == Qt.Key.Key_B:
+            self.b_pressed.emit()
             event.accept()
             return
         if self._tool:

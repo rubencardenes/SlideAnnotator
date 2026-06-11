@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 
-from PySide6.QtCore import Qt, QPointF, QSize, Signal
+from PySide6.QtCore import Qt, QPointF, QRectF, QSize, Signal
 from PySide6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import (
     QLabel,
@@ -139,6 +139,72 @@ def _icon_eye(size: int = _ICON_SZ) -> QIcon:
     return QIcon(pix)
 
 
+def _icon_box_marker(size: int = _ICON_SZ) -> QIcon:
+    pix = QPixmap(size, size)
+    pix.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pix)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    c = size / 2.0
+    color = QColor(55, 215, 100)
+    sz = size * 0.54
+    pen = QPen(color, size * 0.10)
+    pen.setJoinStyle(Qt.PenJoinStyle.MiterJoin)
+    p.setPen(pen)
+    p.setBrush(QColor(55, 215, 100, 45))
+    p.drawRect(QRectF(c - sz / 2, c - sz / 2, sz, sz))
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(color)
+    p.drawEllipse(QPointF(c, c), size * 0.08, size * 0.08)
+    p.end()
+    return QIcon(pix)
+
+
+def _icon_save(size: int = _ICON_SZ) -> QIcon:
+    pix = QPixmap(size, size)
+    pix.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pix)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    color = QColor(80, 210, 130)
+    pen = QPen(color, size * 0.12)
+    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+    pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+    p.setPen(pen)
+    c = size / 2.0
+    p.drawLine(QPointF(c, size * 0.10), QPointF(c, size * 0.58))
+    aw = size * 0.22
+    p.drawLine(QPointF(c, size * 0.58), QPointF(c - aw, size * 0.38))
+    p.drawLine(QPointF(c, size * 0.58), QPointF(c + aw, size * 0.38))
+    m = size * 0.13
+    p.drawLine(QPointF(m, size * 0.73), QPointF(m, size * 0.87))
+    p.drawLine(QPointF(m, size * 0.87), QPointF(size - m, size * 0.87))
+    p.drawLine(QPointF(size - m, size * 0.87), QPointF(size - m, size * 0.73))
+    p.end()
+    return QIcon(pix)
+
+
+def _icon_load(size: int = _ICON_SZ) -> QIcon:
+    pix = QPixmap(size, size)
+    pix.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pix)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    color = QColor(80, 160, 240)
+    pen = QPen(color, size * 0.12)
+    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+    pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+    p.setPen(pen)
+    c = size / 2.0
+    m = size * 0.13
+    p.drawLine(QPointF(m, size * 0.73), QPointF(m, size * 0.87))
+    p.drawLine(QPointF(m, size * 0.87), QPointF(size - m, size * 0.87))
+    p.drawLine(QPointF(size - m, size * 0.87), QPointF(size - m, size * 0.73))
+    p.drawLine(QPointF(c, size * 0.58), QPointF(c, size * 0.10))
+    aw = size * 0.22
+    p.drawLine(QPointF(c, size * 0.10), QPointF(c - aw, size * 0.30))
+    p.drawLine(QPointF(c, size * 0.10), QPointF(c + aw, size * 0.30))
+    p.end()
+    return QIcon(pix)
+
+
 def _icon_quit(size: int = _ICON_SZ) -> QIcon:
     pix = QPixmap(size, size)
     pix.fill(Qt.GlobalColor.transparent)
@@ -172,6 +238,9 @@ def _make_tool_btn(icon: QIcon, tooltip: str, checkable: bool = True) -> QToolBu
 class AnnotationToolbar(QToolBar):
     tool_changed = Signal(str)
     annotations_toggled = Signal(bool)
+    marker_box_toggled = Signal(bool)
+    save_requested = Signal()
+    load_requested = Signal()
     quit_requested = Signal()
 
     def __init__(self, parent=None) -> None:
@@ -190,12 +259,15 @@ class AnnotationToolbar(QToolBar):
         self._select_btn = _make_tool_btn(_icon_select(), "Select: click/drag to move · D to delete")
         self._eye_btn = _make_tool_btn(_icon_eye(), "Toggle annotations [Space]", checkable=True)
         self._eye_btn.setChecked(True)
+        self._box_btn = _make_tool_btn(_icon_box_marker(), "Show markers as bounding boxes [B]", checkable=True)
+        self._box_btn.setChecked(False)
 
         for btn in (self._pan_btn, self._marker_btn, self._region_btn, self._select_btn):
             self.addWidget(btn)
 
         self.addSeparator()
         self.addWidget(self._eye_btn)
+        self.addWidget(self._box_btn)
         self.addSeparator()
 
         self._channel_lbl = QLabel("Channel: —")
@@ -212,6 +284,17 @@ class AnnotationToolbar(QToolBar):
             btn.clicked.connect(lambda checked, n=name: self._on_tool_clicked(n))
 
         self._eye_btn.toggled.connect(self.annotations_toggled)
+        self._box_btn.toggled.connect(self.marker_box_toggled)
+
+        self.addSeparator()
+        self._save_btn = _make_tool_btn(_icon_save(), "Save Annotations", checkable=False)
+        self._load_btn = _make_tool_btn(_icon_load(), "Load Annotations", checkable=False)
+        self._save_btn.setEnabled(False)
+        self._load_btn.setEnabled(False)
+        self._save_btn.clicked.connect(self.save_requested)
+        self._load_btn.clicked.connect(self.load_requested)
+        self.addWidget(self._save_btn)
+        self.addWidget(self._load_btn)
 
         spacer = QWidget()
         spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
@@ -235,6 +318,10 @@ class AnnotationToolbar(QToolBar):
     def set_active_channel(self, name: str) -> None:
         self._active_channel_name = name
         self._channel_lbl.setText(f"Channel: {name}" if name else "Channel: —")
+
+    def set_save_load_enabled(self, enabled: bool) -> None:
+        self._save_btn.setEnabled(enabled)
+        self._load_btn.setEnabled(enabled)
 
     def toggle_annotations_visibility(self) -> None:
         self._eye_btn.setChecked(not self._eye_btn.isChecked())
