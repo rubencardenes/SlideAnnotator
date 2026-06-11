@@ -24,6 +24,8 @@ A desktop annotation tool for multiplex immunofluorescence (mIF) whole-slide ima
 - **Configurable settings** — `settings.yaml` at the project root (or `~/.config/slideannotator/settings.yaml`) controls application-level behaviour such as the annotations output directory.
 - **Unsaved-changes guard** — prompts to save before opening a new image or quitting.
 - **Colorful icon toolbar** — tool buttons use crisp QPainter-drawn icons (pan, marker, region, select, eye, box-marker, save, load, quit) instead of text characters, avoiding platform emoji rendering issues.
+- **StarDist nucleus segmentation** — run StarDist (ONNX) inference on all FOVs in a background thread; detected cell outlines are overlaid on the slide. Toggle outline visibility with the toolbar button; customise outline colour and line width via **StarDist → Outline Settings**.
+- **Annotation summary** — **Summary** toolbar button opens a dialog showing, across all annotation files in the configured directory, the total count of cell markers, regions, and FOVs grouped by slide and channel.
 
 ## Supported file formats
 
@@ -34,6 +36,7 @@ A desktop annotation tool for multiplex immunofluorescence (mIF) whole-slide ima
 | Hamamatsu NDPI | `.ndpi` |
 | Leica SCN | `.scn` |
 | PerkinElmer QPTIFF | `.qptiff` |
+| Imaris HDF5 | `.ims` |
 
 ## Requirements
 
@@ -42,6 +45,8 @@ A desktop annotation tool for multiplex immunofluorescence (mIF) whole-slide ima
 - [pyvips](https://pypi.org/project/pyvips/) ≥ 2.2 (requires libvips ≥ 8.9 for SubIFD pyramid support)
 - [numpy](https://pypi.org/project/numpy/) ≥ 1.26
 - [PyYAML](https://pypi.org/project/PyYAML/) ≥ 6.0
+- [h5py](https://pypi.org/project/h5py/) ≥ 3.0 (required for Imaris `.ims` files)
+- [onnxruntime](https://pypi.org/project/onnxruntime/) ≥ 1.17 (required for StarDist inference)
 
 ## Installation
 
@@ -98,6 +103,7 @@ annotations_dir: ~/data/annotations
 | Key | Default | Description |
 |-----|---------|-------------|
 | `annotations_dir` | `~/data/annotations` | Directory where annotation JSON files are saved and loaded from. |
+| `stardist_model` | *(none)* | Path to the StarDist ONNX model file used for nucleus segmentation (e.g. `~/data/models/stardist-versatile-fluo_dynamic.onnx`). |
 
 ## FOV image export
 
@@ -130,14 +136,23 @@ slideannotator/
 ├── app.py                  # Entry point, logging setup
 ├── settings.py             # App-level settings loaded from settings.yaml
 ├── viewsettings.py         # Per-image channel view settings (save / restore)
+├── inference/
+│   ├── stardist.py         # StarDistONNX — ONNX model wrapper
+│   ├── stardist_worker.py  # QRunnable background inference worker
+│   ├── stardist_utils.py   # Pre/post-processing helpers
+│   └── nms.py              # Non-maximum suppression
 ├── ui/
 │   ├── main_window.py      # Main window, menus, file I/O
 │   ├── annotation_toolbar.py  # Icon toolbar (QPainter-drawn icons)
-│   └── channel_panel.py    # Per-channel controls
+│   ├── channel_panel.py    # Per-channel controls
+│   ├── summary_dialog.py   # Annotation summary dialog
+│   └── stardist_settings_dialog.py  # StarDist outline colour/width settings
 ├── readers/
 │   ├── base.py             # ImageReader ABC + OME-XML helpers
 │   ├── ome_tif.py          # ImageReaderOmeTif (pyvips)
+│   ├── ims.py              # ImageReaderIms (h5py, Imaris HDF5)
 │   ├── slide_reader.py     # OmeTifSlideReader — SlideReader protocol adapter
+│   ├── ims_slide_reader.py # ImsSlideReader — SlideReader protocol adapter for .ims
 │   └── protocol.py         # SlideReader protocol + ChannelInfo
 ├── tiles/
 │   ├── tile_manager.py     # Tile request dispatch + LRU caching
