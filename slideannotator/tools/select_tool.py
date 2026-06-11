@@ -70,14 +70,16 @@ class SelectTool(BaseTool):
             self._store.move_fov(self._drag_id, ox + delta.x(), oy + delta.y())
 
     def mouse_release(self, event: QMouseEvent, scene_pos: QPointF) -> None:
+        if self._dragging and self._drag_id is not None and self._original_pos is not None:
+            self._store.record_move(self._drag_id, self._drag_type, *self._original_pos)
         self._dragging = False
         self._drag_id = None
         self._drag_type = None
+        self._original_pos = None
 
     def key_press(self, event: QKeyEvent) -> None:
         if event.key() in (Qt.Key.Key_D, Qt.Key.Key_Delete, Qt.Key.Key_Backspace):
-            for ann_id in list(self._store.selected):
-                self._store.delete(ann_id)
+            self._store.delete_batch(list(self._store.selected))
 
     # ------------------------------------------------------------------
     def _hit_test(self, scene_pos: QPointF) -> str | None:

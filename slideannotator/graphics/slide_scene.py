@@ -33,6 +33,8 @@ class SlideScene(QGraphicsScene):
         self._stardist_items: list[QGraphicsPolygonItem] = []
         self._annotations_visible = True
         self._stardist_visible = True
+        self._stardist_color = QColor(0, 230, 180)
+        self._stardist_width = 1
         self._marker_show_box = False
 
         self._current_viewport: QRectF | None = None
@@ -116,10 +118,7 @@ class SlideScene(QGraphicsScene):
             self.removeItem(item)
         self._stardist_items.clear()
 
-        pen = QPen(QColor(0, 230, 180))
-        pen.setCosmetic(True)
-        pen.setWidth(1)
-
+        pen = self._make_stardist_pen()
         for poly in polygons:
             qpoly = QPolygonF()
             for px, py in poly:
@@ -136,6 +135,19 @@ class SlideScene(QGraphicsScene):
         self._stardist_visible = visible
         for item in self._stardist_items:
             item.setVisible(visible)
+
+    def set_stardist_style(self, color: QColor, width: int) -> None:
+        self._stardist_color = QColor(color)
+        self._stardist_width = width
+        pen = self._make_stardist_pen()
+        for item in self._stardist_items:
+            item.setPen(pen)
+
+    def _make_stardist_pen(self) -> QPen:
+        pen = QPen(self._stardist_color)
+        pen.setCosmetic(True)
+        pen.setWidth(self._stardist_width)
+        return pen
 
     # ------------------------------------------------------------------
     def on_tile_ready(self, key: TileKey, qimage) -> None:

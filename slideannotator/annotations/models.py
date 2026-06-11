@@ -51,6 +51,15 @@ class FOVAnnotation:
         return FOVAnnotation(id=str(uuid.uuid4()), x=x, y=y, w=w, h=h)
 
 
+def _snapshot_ann(ann: "CellMarker | RegionAnnotation | FOVAnnotation"):
+    """Return a copy of an annotation for undo history."""
+    if isinstance(ann, RegionAnnotation):
+        return RegionAnnotation(id=ann.id, points=list(ann.points), channel=ann.channel)
+    if isinstance(ann, CellMarker):
+        return CellMarker(id=ann.id, x=ann.x, y=ann.y, channel=ann.channel)
+    return FOVAnnotation(id=ann.id, x=ann.x, y=ann.y, w=ann.w, h=ann.h)
+
+
 class AnnotationStore(QObject):
     annotation_added = Signal(str)      # id
     annotation_removed = Signal(str)    # id
@@ -64,6 +73,9 @@ class AnnotationStore(QObject):
         self._fovs: dict[str, FOVAnnotation] = {}
         self._selected: set[str] = set()
         self.is_dirty = False
+        self._undo_stack: list = []
+        self._redo_stack: list = []
+        self._is_undoing = False
 
     # ------------------------------------------------------------------
     def add_marker(self, x: float, y: float, channel: str) -> CellMarker:
@@ -71,6 +83,9 @@ class AnnotationStore(QObject):
         self._markers[m.id] = m
         self.is_dirty = True
         self.annotation_added.emit(m.id)
+        if not self._is_undoing:
+            snap = _snapshot_ann(m)
+            self._push_undo(lambda aid=m.id: self.delete(aid), lambda s=snap: self._restore(s))
         return m
 
     def add_region(
@@ -80,6 +95,9 @@ class AnnotationStore(QObject):
         self._regions[r.id] = r
         self.is_dirty = True
         self.annotation_added.emit(r.id)
+        if not self._is_undoing:
+            snap = _snapshot_ann(r)
+            self._push_undo(lambda aid=r.id: self.delete(aid), lambda s=snap: self._restore(s))
         return r
 
     def add_fov(
@@ -90,15 +108,22 @@ class AnnotationStore(QObject):
         self._fovs[f.id] = f
         self.is_dirty = True
         self.annotation_added.emit(f.id)
+        if not self._is_undoing:
+            snap = _snapshot_ann(f)
+            self._push_undo(lambda aid=f.id: self.delete(aid), lambda s=snap: self._restore(s))
         return f
 
     def delete(self, ann_id: str) -> None:
+        ann = self.get_annotation(ann_id)
         self._markers.pop(ann_id, None)
         self._regions.pop(ann_id, None)
         self._fovs.pop(ann_id, None)
         self._selected.discard(ann_id)
         self.is_dirty = True
         self.annotation_removed.emit(ann_id)
+        if ann is not None and not self._is_undoing:
+            snap = _snapshot_ann(ann)
+            self._push_undo(lambda s=snap: self._restore(s), lambda aid=ann_id: self.delete(aid))
 
     def move_marker(self, ann_id: str, x: float, y: float) -> None:
         if ann_id in self._markers:
@@ -165,8 +190,131 @@ class AnnotationStore(QObject):
         return self._fovs
 
     def clear(self) -> None:
-        for ann_id in list(self._markers) + list(self._regions) + list(self._fovs):
-            self.delete(ann_id)
+        self._is_undoing = True
+        try:
+            for ann_id in list(self._markers) + list(self._regions) + list(self._fovs):
+                self.delete(ann_id)
+        finally:
+            self._is_undoing = False
+        self._undo_stack.clear()
+        self._redo_stack.clear()
 
     def all_annotations(self) -> list[CellMarker | RegionAnnotation | FOVAnnotation]:
         return list(self._markers.values()) + list(self._regions.values()) + list(self._fovs.values())
+
+    # ------------------------------------------------------------------
+    # Undo / Redo
+
+    def delete_batch(self, ann_ids: list[str]) -> None:
+        """Delete multiple annotations as a single undoable action."""
+        if self._is_undoing:
+            return
+        anns = [self.get_annotation(aid) for aid in ann_ids if self.get_annotation(aid) is not None]
+        if not anns:
+            return
+        snapshots = [_snapshot_ann(a) for a in anns]
+        clean_ids = [a.id for a in anns]
+        self._is_undoing = True
+        try:
+            for aid in clean_ids:
+                self.delete(aid)
+        finally:
+            self._is_undoing = False
+        self._push_undo(
+            lambda ss=snapshots: [self._restore(s) for s in ss],
+            lambda ids=clean_ids: [self.delete(aid) for aid in ids],
+        )
+
+    def record_move(self, ann_id: str, kind: str, old_x: float, old_y: float) -> None:
+        """Record a completed single-annotation drag for undo."""
+        if self._is_undoing:
+            return
+        ann = self._markers.get(ann_id) if kind == "marker" else self._fovs.get(ann_id)
+        if ann is None or (ann.x == old_x and ann.y == old_y):
+            return
+        new_x, new_y = ann.x, ann.y
+        self._push_undo(
+            lambda aid=ann_id, k=kind, x=old_x, y=old_y: self._apply_move(aid, (k, x, y)),
+            lambda aid=ann_id, k=kind, x=new_x, y=new_y: self._apply_move(aid, (k, x, y)),
+        )
+
+    def record_batch_move(self, originals: dict) -> None:
+        """Record a completed multi-annotation drag for undo."""
+        if self._is_undoing or not originals:
+            return
+        new_state: dict = {}
+        for ann_id, orig in originals.items():
+            kind = orig[0]
+            if kind == "marker":
+                ann = self._markers.get(ann_id)
+                if ann is not None:
+                    new_state[ann_id] = ("marker", ann.x, ann.y)
+            elif kind == "fov":
+                ann = self._fovs.get(ann_id)
+                if ann is not None:
+                    new_state[ann_id] = ("fov", ann.x, ann.y)
+            elif kind == "region":
+                ann = self._regions.get(ann_id)
+                if ann is not None:
+                    new_state[ann_id] = ("region", list(ann.points))
+        if not new_state:
+            return
+        if not any(originals.get(aid) != new_state.get(aid) for aid in new_state):
+            return
+        self._push_undo(
+            lambda old=dict(originals): [self._apply_move(aid, state) for aid, state in old.items()],
+            lambda new=new_state: [self._apply_move(aid, state) for aid, state in new.items()],
+        )
+
+    def undo(self) -> None:
+        if not self._undo_stack:
+            return
+        undo_fn, redo_fn = self._undo_stack.pop()
+        self._is_undoing = True
+        try:
+            undo_fn()
+        finally:
+            self._is_undoing = False
+        self._redo_stack.append((undo_fn, redo_fn))
+
+    def redo(self) -> None:
+        if not self._redo_stack:
+            return
+        undo_fn, redo_fn = self._redo_stack.pop()
+        self._is_undoing = True
+        try:
+            redo_fn()
+        finally:
+            self._is_undoing = False
+        self._undo_stack.append((undo_fn, redo_fn))
+
+    @property
+    def can_undo(self) -> bool:
+        return bool(self._undo_stack)
+
+    @property
+    def can_redo(self) -> bool:
+        return bool(self._redo_stack)
+
+    def _push_undo(self, undo_fn, redo_fn) -> None:
+        self._undo_stack.append((undo_fn, redo_fn))
+        self._redo_stack.clear()
+
+    def _restore(self, ann) -> None:
+        if isinstance(ann, CellMarker):
+            self._markers[ann.id] = ann
+        elif isinstance(ann, RegionAnnotation):
+            self._regions[ann.id] = ann
+        elif isinstance(ann, FOVAnnotation):
+            self._fovs[ann.id] = ann
+        self.is_dirty = True
+        self.annotation_added.emit(ann.id)
+
+    def _apply_move(self, ann_id: str, state: tuple) -> None:
+        kind = state[0]
+        if kind == "marker":
+            self.move_marker(ann_id, state[1], state[2])
+        elif kind == "fov":
+            self.move_fov(ann_id, state[1], state[2])
+        elif kind == "region":
+            self.set_region_points(ann_id, state[1])

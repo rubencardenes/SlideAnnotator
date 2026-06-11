@@ -33,6 +33,7 @@ from ..tools.region_tool import RegionTool
 from ..tools.select_tool import SelectTool
 from .annotation_toolbar import AnnotationToolbar
 from .channel_panel import ChannelPanel
+from .stardist_settings_dialog import StarDistSettingsDialog
 from .summary_dialog import SummaryDialog
 
 
@@ -52,6 +53,8 @@ class MainWindow(QMainWindow):
         self._tools: dict[str, object] = {}
         self._current_tool = None
         self._stardist_model: StarDistONNX | None = None
+        self._stardist_outline_color = None   # persists across image loads
+        self._stardist_outline_width = None
 
         self._thread_pool = QThreadPool.globalInstance()
         self._thread_pool.setMaxThreadCount(4)
@@ -82,6 +85,9 @@ class MainWindow(QMainWindow):
         self._toolbar.run_stardist_requested.connect(self._run_stardist)
         self._toolbar.stardist_toggled.connect(self._on_stardist_toggled)
         self._toolbar.quit_requested.connect(self.close)
+        self._toolbar.undo_requested.connect(self._undo)
+        self._toolbar.redo_requested.connect(self._redo)
+        self._toolbar.stardist_settings_requested.connect(self._show_stardist_settings)
         self.addToolBar(self._toolbar)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -112,6 +118,16 @@ class MainWindow(QMainWindow):
             "QMenu { background: #222; color: #ccc; border: 1px solid #444; }"
             "QMenu::item:selected { background: #2a4a7a; }"
         )
+        edit_menu = mb.addMenu("&Edit")
+        self._undo_action = edit_menu.addAction("&Undo")
+        self._undo_action.setShortcut("Ctrl+Z")
+        self._undo_action.triggered.connect(self._undo)
+        self._undo_action.setEnabled(False)
+        self._redo_action = edit_menu.addAction("&Redo")
+        self._redo_action.setShortcut("Ctrl+Shift+Z")
+        self._redo_action.triggered.connect(self._redo)
+        self._redo_action.setEnabled(False)
+
         file_menu = mb.addMenu("&File")
 
         open_action = file_menu.addAction("&Open Image…")
@@ -177,6 +193,9 @@ class MainWindow(QMainWindow):
 
             # Annotation store
             self._store = AnnotationStore()
+            self._store.annotation_added.connect(self._update_undo_redo_state)
+            self._store.annotation_removed.connect(self._update_undo_redo_state)
+            self._store.annotation_moved.connect(self._update_undo_redo_state)
 
             # Tile caches + manager
             raw_cache = LRUCache(max_size=500)
@@ -190,6 +209,10 @@ class MainWindow(QMainWindow):
                 self._tile_manager, self._store, self._channel_settings
             )
             scene.load_slide(self._reader)
+            if self._stardist_outline_color is not None:
+                scene.set_stardist_style(
+                    self._stardist_outline_color, self._stardist_outline_width
+                )
             self._view.setScene(scene)
             self._view.fit_to_slide()
 
@@ -230,6 +253,23 @@ class MainWindow(QMainWindow):
 
         except Exception as exc:
             QMessageBox.critical(self, "Error Opening Image", str(exc))
+
+    def _undo(self) -> None:
+        if self._store is not None:
+            self._store.undo()
+            self._update_undo_redo_state()
+
+    def _redo(self) -> None:
+        if self._store is not None:
+            self._store.redo()
+            self._update_undo_redo_state()
+
+    def _update_undo_redo_state(self, *_) -> None:
+        can_undo = self._store is not None and self._store.can_undo
+        can_redo = self._store is not None and self._store.can_redo
+        self._undo_action.setEnabled(can_undo)
+        self._redo_action.setEnabled(can_redo)
+        self._toolbar.set_undo_redo_enabled(can_undo, can_redo)
 
     def _export_markers(self) -> None:
         if self._store is None or self._slide_path is None:
@@ -484,6 +524,21 @@ class MainWindow(QMainWindow):
         scene = self._view.scene()
         if isinstance(scene, SlideScene):
             scene.set_stardist_visible(visible)
+
+    def _show_stardist_settings(self) -> None:
+        scene = self._view.scene()
+        if not isinstance(scene, SlideScene):
+            return
+        from PySide6.QtGui import QColor as _QColor
+        cur_color = self._stardist_outline_color or _QColor(0, 230, 180)
+        cur_width = self._stardist_outline_width or 1
+        dlg = StarDistSettingsDialog(cur_color, cur_width, self)
+        if dlg.exec():
+            self._stardist_outline_color = dlg.selected_color
+            self._stardist_outline_width = dlg.selected_width
+            scene.set_stardist_style(
+                self._stardist_outline_color, self._stardist_outline_width
+            )
 
     # ------------------------------------------------------------------
     def _prompt_save(self) -> bool:

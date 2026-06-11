@@ -117,6 +117,8 @@ class ShiftSelectMixin:
             return True
 
         if self._sx_mode in ("pre_drag", "dragging"):
+            if self._sx_moved and self._sx_drag_originals:
+                self._store.record_batch_move(self._sx_drag_originals)
             if (
                 not self._sx_moved
                 and self._sx_hit_id is not None
@@ -131,8 +133,7 @@ class ShiftSelectMixin:
 
     def _sx_key_press(self, event) -> bool:
         if event.key() in (Qt.Key.Key_D, Qt.Key.Key_Delete, Qt.Key.Key_Backspace):
-            for ann_id in list(self._store.selected):
-                self._store.delete(ann_id)
+            self._store.delete_batch(list(self._store.selected))
             return True
         return False
 

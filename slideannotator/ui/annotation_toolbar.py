@@ -235,46 +235,164 @@ def _icon_summary(size: int = _ICON_SZ) -> QIcon:
 
 
 def _icon_stardist_run(size: int = _ICON_SZ) -> QIcon:
+    """Nuclear polygon blob — resembles a cell nucleus outline."""
     pix = QPixmap(size, size)
     pix.fill(Qt.GlobalColor.transparent)
     p = QPainter(pix)
     p.setRenderHint(QPainter.RenderHint.Antialiasing)
     c = size / 2.0
     color = QColor(0, 230, 180)
-    n_rays, inner_r, outer_r = 8, size * 0.13, size * 0.40
-    pen = QPen(color, size * 0.07)
-    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+
+    # Smooth organic nucleus shape via Catmull-Rom through 8 irregular radii
+    n = 8
+    rs = [0.40, 0.34, 0.41, 0.36, 0.43, 0.35, 0.39, 0.37]
+    pts = [
+        (c + size * rs[i] * math.cos(math.radians(i * 360.0 / n - 70)),
+         c + size * rs[i] * math.sin(math.radians(i * 360.0 / n - 70)))
+        for i in range(n)
+    ]
+    path = QPainterPath()
+    path.moveTo(*pts[0])
+    for i in range(n):
+        p0, p1, p2, p3 = pts[(i-1) % n], pts[i], pts[(i+1) % n], pts[(i+2) % n]
+        cp1 = (p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6)
+        cp2 = (p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6)
+        path.cubicTo(cp1[0], cp1[1], cp2[0], cp2[1], p2[0], p2[1])
+    path.closeSubpath()
+
+    pen = QPen(color, size * 0.10)
+    pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
     p.setPen(pen)
-    for i in range(n_rays):
-        a = math.radians(i * 360.0 / n_rays)
-        p.drawLine(
-            QPointF(c + inner_r * math.cos(a), c + inner_r * math.sin(a)),
-            QPointF(c + outer_r * math.cos(a), c + outer_r * math.sin(a)),
-        )
-    p.setPen(QPen(color, size * 0.10))
-    p.setBrush(QColor(0, 230, 180, 60))
-    p.drawEllipse(QPointF(c, c), size * 0.20, size * 0.20)
+    p.setBrush(QColor(0, 230, 180, 45))
+    p.drawPath(path)
+    # Nucleolus dot
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(color)
+    p.drawEllipse(QPointF(c - size * 0.07, c - size * 0.04), size * 0.09, size * 0.09)
     p.end()
     return QIcon(pix)
 
 
 def _icon_stardist_toggle(size: int = _ICON_SZ) -> QIcon:
+    """Eye icon in orange — toggle StarDist polygon visibility."""
     pix = QPixmap(size, size)
     pix.fill(Qt.GlobalColor.transparent)
     p = QPainter(pix)
     p.setRenderHint(QPainter.RenderHint.Antialiasing)
     c = size / 2.0
-    color = QColor(0, 230, 180)
+    color = QColor(255, 165, 30)
     pen = QPen(color, size * 0.10)
     pen.setCapStyle(Qt.PenCapStyle.RoundCap)
     p.setPen(pen)
     p.setBrush(Qt.BrushStyle.NoBrush)
-    p.drawEllipse(QPointF(c, c), size * 0.34, size * 0.34)
-    pen2 = QPen(color, size * 0.07)
-    p.setPen(pen2)
-    h = size * 0.13
-    p.drawLine(QPointF(c - h, c), QPointF(c + h, c))
-    p.drawLine(QPointF(c, c - h), QPointF(c, c + h))
+    rx, ry = size * 0.42, size * 0.24
+    path = QPainterPath()
+    path.moveTo(c - rx, c)
+    path.cubicTo(c - rx * 0.4, c - ry * 2.2, c + rx * 0.4, c - ry * 2.2, c + rx, c)
+    path.cubicTo(c + rx * 0.4, c + ry * 2.2, c - rx * 0.4, c + ry * 2.2, c - rx, c)
+    p.drawPath(path)
+    p.setPen(QPen(color, size * 0.07))
+    p.setBrush(QColor(255, 165, 30, 70))
+    p.drawEllipse(QPointF(c, c), size * 0.16, size * 0.16)
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(color)
+    p.drawEllipse(QPointF(c, c), size * 0.07, size * 0.07)
+    p.end()
+    return QIcon(pix)
+
+
+def _icon_stardist_settings(size: int = _ICON_SZ) -> QIcon:
+    """Gear icon for StarDist outline settings."""
+    pix = QPixmap(size, size)
+    pix.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pix)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    c = size / 2.0
+    color = QColor(190, 190, 190)
+
+    n_teeth = 7
+    outer_r = size * 0.44
+    inner_r = size * 0.30
+    hole_r = size * 0.13
+    tooth_half = math.pi / n_teeth * 0.42  # half angular width of each tooth top
+
+    gear = QPainterPath()
+    for i in range(n_teeth):
+        a_mid = math.radians(i * 360.0 / n_teeth)
+        angles = [
+            (inner_r, a_mid - tooth_half * 1.8),
+            (outer_r, a_mid - tooth_half),
+            (outer_r, a_mid + tooth_half),
+            (inner_r, a_mid + tooth_half * 1.8),
+        ]
+        for j, (r, a) in enumerate(angles):
+            x, y = c + r * math.cos(a), c + r * math.sin(a)
+            gear.moveTo(x, y) if (i == 0 and j == 0) else gear.lineTo(x, y)
+    gear.closeSubpath()
+
+    # Punch center hole via even-odd fill rule
+    gear.setFillRule(Qt.FillRule.OddEvenFill)
+    gear.addEllipse(QPointF(c, c), hole_r, hole_r)
+
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(color)
+    p.drawPath(gear)
+    p.end()
+    return QIcon(pix)
+
+
+def _icon_undo(size: int = _ICON_SZ) -> QIcon:
+    pix = QPixmap(size, size)
+    pix.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pix)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    color = QColor(255, 200, 60)
+    c, r = size / 2.0, size * 0.33
+    pen = QPen(color, size * 0.10)
+    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+    p.setPen(pen)
+    p.setBrush(Qt.BrushStyle.NoBrush)
+    # CCW 270° arc: right → top → left → bottom; gap at lower-right
+    p.drawArc(QRectF(c - r, c - r, r * 2, r * 2), 0, int(270 * 16))
+    # Arrowhead at 270° (bottom), CCW tangent → pointing right
+    ax, ay = c, c + r
+    head = size * 0.14
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(color)
+    path = QPainterPath()
+    path.moveTo(ax + head, ay)
+    path.lineTo(ax, ay - head * 0.65)
+    path.lineTo(ax, ay + head * 0.65)
+    path.closeSubpath()
+    p.drawPath(path)
+    p.end()
+    return QIcon(pix)
+
+
+def _icon_redo(size: int = _ICON_SZ) -> QIcon:
+    pix = QPixmap(size, size)
+    pix.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pix)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    color = QColor(255, 200, 60)
+    c, r = size / 2.0, size * 0.33
+    pen = QPen(color, size * 0.10)
+    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+    p.setPen(pen)
+    p.setBrush(Qt.BrushStyle.NoBrush)
+    # CW 270° arc: left → top → right → bottom; gap at lower-left
+    p.drawArc(QRectF(c - r, c - r, r * 2, r * 2), int(180 * 16), int(-270 * 16))
+    # Arrowhead at 270° (bottom), CW tangent → pointing left
+    ax, ay = c, c + r
+    head = size * 0.14
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(color)
+    path = QPainterPath()
+    path.moveTo(ax - head, ay)
+    path.lineTo(ax, ay - head * 0.65)
+    path.lineTo(ax, ay + head * 0.65)
+    path.closeSubpath()
+    p.drawPath(path)
     p.end()
     return QIcon(pix)
 
@@ -319,6 +437,9 @@ class AnnotationToolbar(QToolBar):
     run_stardist_requested = Signal()
     stardist_toggled = Signal(bool)
     quit_requested = Signal()
+    undo_requested = Signal()
+    redo_requested = Signal()
+    stardist_settings_requested = Signal()
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -339,9 +460,19 @@ class AnnotationToolbar(QToolBar):
         self._box_btn = _make_tool_btn(_icon_box_marker(), "Show markers as bounding boxes [B]", checkable=True)
         self._box_btn.setChecked(False)
 
+        self._undo_btn = _make_tool_btn(_icon_undo(), "Undo [Ctrl+Z]", checkable=False)
+        self._redo_btn = _make_tool_btn(_icon_redo(), "Redo [Ctrl+Shift+Z]", checkable=False)
+        self._undo_btn.setEnabled(False)
+        self._redo_btn.setEnabled(False)
+        self._undo_btn.clicked.connect(self.undo_requested)
+        self._redo_btn.clicked.connect(self.redo_requested)
+
         for btn in (self._pan_btn, self._marker_btn, self._region_btn, self._select_btn):
             self.addWidget(btn)
 
+        self.addSeparator()
+        self.addWidget(self._undo_btn)
+        self.addWidget(self._redo_btn)
         self.addSeparator()
         self.addWidget(self._eye_btn)
         self.addWidget(self._box_btn)
@@ -382,15 +513,21 @@ class AnnotationToolbar(QToolBar):
             _icon_stardist_run(), "Run StarDist on FOVs", checkable=False
         )
         self._stardist_toggle_btn = _make_tool_btn(
-            _icon_stardist_toggle(), "Toggle StarDist detections", checkable=True
+            _icon_stardist_toggle(), "Toggle StarDist nuclei [orange eye]", checkable=True
+        )
+        self._stardist_settings_btn = _make_tool_btn(
+            _icon_stardist_settings(), "StarDist outline settings", checkable=False
         )
         self._stardist_toggle_btn.setChecked(True)
         self._stardist_run_btn.setEnabled(False)
         self._stardist_toggle_btn.setEnabled(False)
+        self._stardist_settings_btn.setEnabled(False)
         self._stardist_run_btn.clicked.connect(self.run_stardist_requested)
         self._stardist_toggle_btn.toggled.connect(self.stardist_toggled)
+        self._stardist_settings_btn.clicked.connect(self.stardist_settings_requested)
         self.addWidget(self._stardist_run_btn)
         self.addWidget(self._stardist_toggle_btn)
+        self.addWidget(self._stardist_settings_btn)
 
         spacer = QWidget()
         spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
@@ -421,9 +558,14 @@ class AnnotationToolbar(QToolBar):
         self._summary_btn.setEnabled(enabled)
         self._stardist_run_btn.setEnabled(enabled)
         self._stardist_toggle_btn.setEnabled(enabled)
+        self._stardist_settings_btn.setEnabled(enabled)
 
     def set_stardist_running(self, running: bool) -> None:
         self._stardist_run_btn.setEnabled(not running)
 
     def toggle_annotations_visibility(self) -> None:
         self._eye_btn.setChecked(not self._eye_btn.isChecked())
+
+    def set_undo_redo_enabled(self, can_undo: bool, can_redo: bool) -> None:
+        self._undo_btn.setEnabled(can_undo)
+        self._redo_btn.setEnabled(can_redo)
