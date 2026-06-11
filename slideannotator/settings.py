@@ -18,12 +18,15 @@ _DEFAULTS = {
 @dataclass
 class Settings:
     annotations_dir: Path = field(default_factory=lambda: Path.home() / "data" / "annotations")
+    stardist_model: Path | None = field(default=None)
 
     @staticmethod
     def from_dict(data: dict) -> "Settings":
         s = Settings()
         if "annotations_dir" in data:
             s.annotations_dir = Path(data["annotations_dir"]).expanduser()
+        if "stardist_model" in data:
+            s.stardist_model = Path(data["stardist_model"]).expanduser()
         return s
 
 

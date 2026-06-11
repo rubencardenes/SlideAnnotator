@@ -16,6 +16,8 @@ from PySide6.QtWidgets import (
 )
 
 from ..annotations.models import AnnotationStore
+from ..inference.stardist import StarDistONNX
+from ..inference.stardist_worker import StarDistWorker
 from ..settings import get_settings
 from ..viewsettings import load_view_settings, save_view_settings
 from ..annotations.serializer import export_markers_txt, export_structured, load_structured
@@ -31,6 +33,7 @@ from ..tools.region_tool import RegionTool
 from ..tools.select_tool import SelectTool
 from .annotation_toolbar import AnnotationToolbar
 from .channel_panel import ChannelPanel
+from .summary_dialog import SummaryDialog
 
 
 class MainWindow(QMainWindow):
@@ -48,6 +51,7 @@ class MainWindow(QMainWindow):
         self._slide_path: Path | None = None
         self._tools: dict[str, object] = {}
         self._current_tool = None
+        self._stardist_model: StarDistONNX | None = None
 
         self._thread_pool = QThreadPool.globalInstance()
         self._thread_pool.setMaxThreadCount(4)
@@ -74,6 +78,9 @@ class MainWindow(QMainWindow):
         self._toolbar.marker_box_toggled.connect(self._on_marker_box_toggled)
         self._toolbar.save_requested.connect(self._save_structured)
         self._toolbar.load_requested.connect(self._load_annotations)
+        self._toolbar.summary_requested.connect(self._show_summary)
+        self._toolbar.run_stardist_requested.connect(self._run_stardist)
+        self._toolbar.stardist_toggled.connect(self._on_stardist_toggled)
         self._toolbar.quit_requested.connect(self.close)
         self.addToolBar(self._toolbar)
 
@@ -209,6 +216,9 @@ class MainWindow(QMainWindow):
             self._on_tool_changed("pan")
             self._toolbar._pan_btn.setChecked(True)
 
+            # Reset stardist toggle button state for new image
+            self._toolbar._stardist_toggle_btn.setChecked(True)
+
             # Connect FOV creation from view key shortcut
             self._view.fov_requested.connect(self._on_fov_requested)
 
@@ -269,6 +279,10 @@ class MainWindow(QMainWindow):
                 self, "No Annotations Found",
                 "No saved annotations found for this image."
             )
+
+    def _show_summary(self) -> None:
+        dlg = SummaryDialog(parent=self)
+        dlg.exec()
 
     def _on_fov_requested(self, scene_pos) -> None:
         if self._store is None:
@@ -409,6 +423,67 @@ class MainWindow(QMainWindow):
         if errors:
             msg += f"\n({errors} error(s))"
         QMessageBox.information(self, "FOV Images Saved", msg)
+
+    # ------------------------------------------------------------------
+    def _run_stardist(self) -> None:
+        if self._store is None or self._reader is None:
+            return
+
+        fovs = list(self._store.fovs.values())
+        if not fovs:
+            QMessageBox.information(self, "No FOVs", "Add FOV annotations first (F key).")
+            return
+
+        channel_idx = None
+        for i, ch in enumerate(self._reader.channels):
+            n = ch.name.lower()
+            if "dapi" in n or "hoechst" in n:
+                channel_idx = i
+                break
+        if channel_idx is None:
+            QMessageBox.warning(
+                self, "No DAPI/Hoechst Channel",
+                "No channel named DAPI or Hoechst found in this image."
+            )
+            return
+
+        model_path = get_settings().stardist_model
+        if model_path is None or not model_path.exists():
+            QMessageBox.warning(
+                self, "Model Not Found",
+                f"StarDist model not found:\n{model_path}\n\nCheck stardist_model in settings.yaml."
+            )
+            return
+
+        if self._stardist_model is None:
+            try:
+                self._stardist_model = StarDistONNX(str(model_path))
+            except Exception as exc:
+                QMessageBox.critical(self, "Model Load Error", str(exc))
+                return
+
+        self._toolbar.set_stardist_running(True)
+        worker = StarDistWorker(self._stardist_model, fovs, self._reader, channel_idx)
+        worker.signals.finished.connect(self._on_stardist_finished)
+        worker.signals.error.connect(self._on_stardist_error)
+        self._thread_pool.start(worker)
+
+    def _on_stardist_finished(self, polygons: list) -> None:
+        self._toolbar.set_stardist_running(False)
+        scene = self._view.scene()
+        if isinstance(scene, SlideScene):
+            scene.set_stardist_polygons(polygons)
+        n = len(polygons)
+        QMessageBox.information(self, "StarDist Complete", f"Detected {n} cell(s) across all FOVs.")
+
+    def _on_stardist_error(self, msg: str) -> None:
+        self._toolbar.set_stardist_running(False)
+        QMessageBox.critical(self, "StarDist Error", msg)
+
+    def _on_stardist_toggled(self, visible: bool) -> None:
+        scene = self._view.scene()
+        if isinstance(scene, SlideScene):
+            scene.set_stardist_visible(visible)
 
     # ------------------------------------------------------------------
     def _prompt_save(self) -> bool:
