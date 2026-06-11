@@ -205,6 +205,80 @@ def _icon_load(size: int = _ICON_SZ) -> QIcon:
     return QIcon(pix)
 
 
+def _icon_summary(size: int = _ICON_SZ) -> QIcon:
+    pix = QPixmap(size, size)
+    pix.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pix)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    color = QColor(190, 150, 255)
+    pen = QPen(color, size * 0.09)
+    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+    p.setPen(pen)
+    lx, rx = size * 0.18, size * 0.82
+    bars = [
+        (size * 0.20, size * 0.38, rx),   # top bar
+        (size * 0.44, size * 0.54, rx * 0.78),  # middle bar (shorter)
+        (size * 0.67, size * 0.70, rx * 0.58),  # bottom bar (shortest)
+    ]
+    dot_r = size * 0.055
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(color)
+    for cy, _, _ in bars:
+        p.drawEllipse(QPointF(lx, cy), dot_r, dot_r)
+    pen2 = QPen(color, size * 0.09)
+    pen2.setCapStyle(Qt.PenCapStyle.RoundCap)
+    p.setPen(pen2)
+    for cy, _, bar_rx in bars:
+        p.drawLine(QPointF(lx + dot_r * 2.2, cy), QPointF(bar_rx, cy))
+    p.end()
+    return QIcon(pix)
+
+
+def _icon_stardist_run(size: int = _ICON_SZ) -> QIcon:
+    pix = QPixmap(size, size)
+    pix.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pix)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    c = size / 2.0
+    color = QColor(0, 230, 180)
+    n_rays, inner_r, outer_r = 8, size * 0.13, size * 0.40
+    pen = QPen(color, size * 0.07)
+    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+    p.setPen(pen)
+    for i in range(n_rays):
+        a = math.radians(i * 360.0 / n_rays)
+        p.drawLine(
+            QPointF(c + inner_r * math.cos(a), c + inner_r * math.sin(a)),
+            QPointF(c + outer_r * math.cos(a), c + outer_r * math.sin(a)),
+        )
+    p.setPen(QPen(color, size * 0.10))
+    p.setBrush(QColor(0, 230, 180, 60))
+    p.drawEllipse(QPointF(c, c), size * 0.20, size * 0.20)
+    p.end()
+    return QIcon(pix)
+
+
+def _icon_stardist_toggle(size: int = _ICON_SZ) -> QIcon:
+    pix = QPixmap(size, size)
+    pix.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pix)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    c = size / 2.0
+    color = QColor(0, 230, 180)
+    pen = QPen(color, size * 0.10)
+    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+    p.setPen(pen)
+    p.setBrush(Qt.BrushStyle.NoBrush)
+    p.drawEllipse(QPointF(c, c), size * 0.34, size * 0.34)
+    pen2 = QPen(color, size * 0.07)
+    p.setPen(pen2)
+    h = size * 0.13
+    p.drawLine(QPointF(c - h, c), QPointF(c + h, c))
+    p.drawLine(QPointF(c, c - h), QPointF(c, c + h))
+    p.end()
+    return QIcon(pix)
+
+
 def _icon_quit(size: int = _ICON_SZ) -> QIcon:
     pix = QPixmap(size, size)
     pix.fill(Qt.GlobalColor.transparent)
@@ -241,6 +315,9 @@ class AnnotationToolbar(QToolBar):
     marker_box_toggled = Signal(bool)
     save_requested = Signal()
     load_requested = Signal()
+    summary_requested = Signal()
+    run_stardist_requested = Signal()
+    stardist_toggled = Signal(bool)
     quit_requested = Signal()
 
     def __init__(self, parent=None) -> None:
@@ -289,12 +366,31 @@ class AnnotationToolbar(QToolBar):
         self.addSeparator()
         self._save_btn = _make_tool_btn(_icon_save(), "Save Annotations", checkable=False)
         self._load_btn = _make_tool_btn(_icon_load(), "Load Annotations", checkable=False)
+        self._summary_btn = _make_tool_btn(_icon_summary(), "Annotation Summary", checkable=False)
         self._save_btn.setEnabled(False)
         self._load_btn.setEnabled(False)
+        self._summary_btn.setEnabled(False)
         self._save_btn.clicked.connect(self.save_requested)
         self._load_btn.clicked.connect(self.load_requested)
+        self._summary_btn.clicked.connect(self.summary_requested)
         self.addWidget(self._save_btn)
         self.addWidget(self._load_btn)
+        self.addWidget(self._summary_btn)
+
+        self.addSeparator()
+        self._stardist_run_btn = _make_tool_btn(
+            _icon_stardist_run(), "Run StarDist on FOVs", checkable=False
+        )
+        self._stardist_toggle_btn = _make_tool_btn(
+            _icon_stardist_toggle(), "Toggle StarDist detections", checkable=True
+        )
+        self._stardist_toggle_btn.setChecked(True)
+        self._stardist_run_btn.setEnabled(False)
+        self._stardist_toggle_btn.setEnabled(False)
+        self._stardist_run_btn.clicked.connect(self.run_stardist_requested)
+        self._stardist_toggle_btn.toggled.connect(self.stardist_toggled)
+        self.addWidget(self._stardist_run_btn)
+        self.addWidget(self._stardist_toggle_btn)
 
         spacer = QWidget()
         spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
@@ -322,6 +418,12 @@ class AnnotationToolbar(QToolBar):
     def set_save_load_enabled(self, enabled: bool) -> None:
         self._save_btn.setEnabled(enabled)
         self._load_btn.setEnabled(enabled)
+        self._summary_btn.setEnabled(enabled)
+        self._stardist_run_btn.setEnabled(enabled)
+        self._stardist_toggle_btn.setEnabled(enabled)
+
+    def set_stardist_running(self, running: bool) -> None:
+        self._stardist_run_btn.setEnabled(not running)
 
     def toggle_annotations_visibility(self) -> None:
         self._eye_btn.setChecked(not self._eye_btn.isChecked())

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QRectF, Qt
-from PySide6.QtGui import QColor, QPolygonF, QPixmap
-from PySide6.QtWidgets import QGraphicsScene
+from PySide6.QtCore import QPointF, QRectF, Qt
+from PySide6.QtGui import QColor, QPen, QPolygonF, QPixmap
+from PySide6.QtWidgets import QGraphicsPolygonItem, QGraphicsScene
 
 from ..annotations.models import AnnotationStore, CellMarker, FOVAnnotation, RegionAnnotation
 from ..compositing.compositor import ChannelSettings
@@ -30,7 +30,9 @@ class SlideScene(QGraphicsScene):
         self._marker_items: dict[str, CellMarkerItem] = {}
         self._region_items: dict[str, RegionItem] = {}
         self._fov_items: dict[str, FOVItem] = {}
+        self._stardist_items: list[QGraphicsPolygonItem] = []
         self._annotations_visible = True
+        self._stardist_visible = True
         self._marker_show_box = False
 
         self._current_viewport: QRectF | None = None
@@ -54,6 +56,7 @@ class SlideScene(QGraphicsScene):
         self._marker_items.clear()
         self._region_items.clear()
         self._fov_items.clear()
+        self._stardist_items.clear()
         self._current_level = 0
         self._thumbnail_item = None
         w, h = reader.dimensions
@@ -108,6 +111,32 @@ class SlideScene(QGraphicsScene):
         for item in self._fov_items.values():
             item.setVisible(visible)
 
+    def set_stardist_polygons(self, polygons: list[list[tuple[float, float]]]) -> None:
+        for item in self._stardist_items:
+            self.removeItem(item)
+        self._stardist_items.clear()
+
+        pen = QPen(QColor(0, 230, 180))
+        pen.setCosmetic(True)
+        pen.setWidth(1)
+
+        for poly in polygons:
+            qpoly = QPolygonF()
+            for px, py in poly:
+                qpoly.append(QPointF(px, py))
+            item = QGraphicsPolygonItem(qpoly)
+            item.setPen(pen)
+            item.setBrush(Qt.BrushStyle.NoBrush)
+            item.setZValue(15)
+            item.setVisible(self._stardist_visible)
+            self._stardist_items.append(item)
+            self.addItem(item)
+
+    def set_stardist_visible(self, visible: bool) -> None:
+        self._stardist_visible = visible
+        for item in self._stardist_items:
+            item.setVisible(visible)
+
     # ------------------------------------------------------------------
     def on_tile_ready(self, key: TileKey, qimage) -> None:
         ts = self._tile_manager._reader.tile_size
@@ -150,7 +179,6 @@ class SlideScene(QGraphicsScene):
         item = RegionItem(ann.id, color)
         polygon = QPolygonF()
         for x, y in ann.points:
-            from PySide6.QtCore import QPointF
             polygon.append(QPointF(x, y))
         item.setPolygon(polygon)
         item.setVisible(self._annotations_visible)
@@ -180,7 +208,6 @@ class SlideScene(QGraphicsScene):
             return
         region = self._store.get_region(ann_id)
         if region and ann_id in self._region_items:
-            from PySide6.QtCore import QPointF
             polygon = QPolygonF()
             for x, y in region.points:
                 polygon.append(QPointF(x, y))
