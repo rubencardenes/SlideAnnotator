@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from PySide6.QtWidgets import QGraphicsPixmapItem
-from PySide6.QtCore import QRectF
 
 
 class TileItem(QGraphicsPixmapItem):

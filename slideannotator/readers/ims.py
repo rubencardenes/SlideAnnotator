@@ -68,7 +68,7 @@ class ImageReaderIms(ImageReader):
 
         # Level 0 data dimensions (may be padded beyond image dimensions)
         level0_data = ds[self._res_keys[0]]["TimePoint 0"]["Channel 0"]["Data"]
-        l0_h, l0_w = level0_data.shape[1], level0_data.shape[2]
+        _, l0_w = level0_data.shape[1], level0_data.shape[2]
 
         pyr_info = []
         for i, res_key in enumerate(self._res_keys):

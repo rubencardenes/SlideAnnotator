@@ -1,7 +1,9 @@
 from pathlib import Path
-from .protocol import SlideReader, ChannelInfo
-from .slide_reader import OmeTifSlideReader
+
 from .ims_slide_reader import ImsSlideReader
+from .protocol import ChannelInfo as ChannelInfo
+from .protocol import SlideReader
+from .slide_reader import OmeTifSlideReader
 
 _SUPPORTED = {".tif", ".tiff", ".svs", ".ndpi", ".scn", ".qptiff", ".ims"}
 

@@ -12,7 +12,7 @@ class ChannelSettings:
     min_val: float = 0.0
     max_val: float = 65535.0
 
-    def copy(self) -> "ChannelSettings":
+    def copy(self) -> ChannelSettings:
         return ChannelSettings(
             visible=self.visible,
             color=self.color,

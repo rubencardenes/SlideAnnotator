@@ -3,7 +3,7 @@ from __future__ import annotations
 from PySide6.QtCore import QPointF, Qt
 from PySide6.QtGui import QKeyEvent, QMouseEvent
 
-from ..graphics.cell_marker_item import CellMarkerItem, HALO_EXTRA, SCREEN_RADIUS
+from ..graphics.cell_marker_item import HALO_EXTRA, SCREEN_RADIUS, CellMarkerItem
 from ..graphics.fov_item import FOVItem
 from ..graphics.region_item import RegionItem
 from .base_tool import BaseTool

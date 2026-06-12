@@ -28,3 +28,8 @@ target-version = "py310"
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP"]
 ignore = ["E501"]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.17",
+]

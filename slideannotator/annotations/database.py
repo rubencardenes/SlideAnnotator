@@ -151,7 +151,7 @@ class AnnotationDB:
         )
         self._conn.commit()
 
-    def get_slide_paths(self) -> dict[str, "Path | None"]:
+    def get_slide_paths(self) -> dict[str, Path | None]:
         """Return {slide_name: Path} for every slide that has annotations.
 
         Path is None when the slide file location was never recorded.

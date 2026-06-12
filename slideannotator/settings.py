@@ -24,7 +24,7 @@ class Settings:
     data_dir: Path | None = field(default=None)
 
     @staticmethod
-    def from_dict(data: dict) -> "Settings":
+    def from_dict(data: dict) -> Settings:
         s = Settings()
         if "annotations_dir" in data:
             s.annotations_dir = Path(data["annotations_dir"]).expanduser()

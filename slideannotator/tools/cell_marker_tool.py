@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QPointF, Qt
+from PySide6.QtCore import QPointF
 from PySide6.QtGui import QKeyEvent, QMouseEvent
 
 from .base_tool import BaseTool

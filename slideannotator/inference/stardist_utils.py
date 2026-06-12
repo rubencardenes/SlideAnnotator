@@ -6,6 +6,7 @@ from .nms import (
     non_maximum_suppression_sparse,
 )
 
+
 def ray_angles(n_rays=32):
     return np.linspace(0, 2 * np.pi, n_rays, endpoint=False)
 

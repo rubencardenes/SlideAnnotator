@@ -1,11 +1,7 @@
-from __future__ import (
-    print_function,
-    unicode_literals,
-    absolute_import,
-    division,
-)
-import numpy as np
 from time import time
+
+import numpy as np
+
 from .lib.stardist2d import c_non_max_suppression_inds
 
 
@@ -33,9 +29,7 @@ def _normalize_grid(grid, n):
         return tuple(int(g) for g in grid)
     except (TypeError, AssertionError):
         raise ValueError(
-            "grid = {grid} must be a list/tuple of length {n} with values that are power of 2".format(
-                grid=grid, n=n
-            )
+            f"grid = {grid} must be a list/tuple of length {n} with values that are power of 2"
         )
 
 
@@ -124,8 +118,8 @@ def non_maximum_suppression(
     )
 
     if verbose:
-        print("keeping %s/%s polygons" % (np.count_nonzero(inds), len(inds)))
-        print("NMS took %.4f s" % (time() - t))
+        print(f"keeping {np.count_nonzero(inds)}/{len(inds)} polygons")
+        print(f"NMS took {time() - t:.4f} s")
 
     return points[inds], scores[inds], dist[inds]
 
@@ -173,9 +167,7 @@ def non_maximum_suppression_sparse(
     )
 
     verbose and print(
-        "predicting instances with nms_thresh = {nms_thresh}".format(
-            nms_thresh=nms_thresh
-        ),
+        f"predicting instances with nms_thresh = {nms_thresh}",
         flush=True,
     )
 
@@ -200,8 +192,8 @@ def non_maximum_suppression_sparse(
     )
 
     if verbose:
-        print("keeping %s/%s polyhedra" % (np.count_nonzero(inds), len(inds)))
-        print("NMS took %.4f s" % (time() - t))
+        print(f"keeping {np.count_nonzero(inds)}/{len(inds)} polyhedra")
+        print(f"NMS took {time() - t:.4f} s")
 
     return pointsi[inds], probi[inds], disti[inds], inds_original[inds]
 
@@ -294,9 +286,7 @@ def non_maximum_suppression_3d(
     grid = _normalize_grid(grid, 3)
 
     verbose and print(
-        "predicting instances with prob_thresh = {prob_thresh} and nms_thresh = {nms_thresh}".format(
-            prob_thresh=prob_thresh, nms_thresh=nms_thresh
-        ),
+        f"predicting instances with prob_thresh = {prob_thresh} and nms_thresh = {nms_thresh}",
         flush=True,
     )
 
@@ -308,7 +298,7 @@ def non_maximum_suppression_3d(
 
     ind_thresh = _ind_prob_thresh(prob, prob_thresh, b)
     points = np.stack(np.where(ind_thresh), axis=1)
-    verbose and print("found %s candidates" % len(points))
+    verbose and print(f"found {len(points)} candidates")
     probi = prob[ind_thresh]
     disti = dist[ind_thresh]
 
@@ -331,9 +321,7 @@ def non_maximum_suppression_3d(
         verbose=verbose,
     )
 
-    verbose and print(
-        "keeping %s/%s polyhedra" % (np.count_nonzero(inds), len(inds))
-    )
+    verbose and print(f"keeping {np.count_nonzero(inds)}/{len(inds)} polyhedra")
     return points[inds], probi[inds], disti[inds]
 
 
@@ -378,9 +366,7 @@ def non_maximum_suppression_3d_sparse(
     )
 
     verbose and print(
-        "predicting instances with nms_thresh = {nms_thresh}".format(
-            nms_thresh=nms_thresh
-        ),
+        f"predicting instances with nms_thresh = {nms_thresh}",
         flush=True,
     )
 
@@ -403,9 +389,7 @@ def non_maximum_suppression_3d_sparse(
         verbose=verbose,
     )
 
-    verbose and print(
-        "keeping %s/%s polyhedra" % (np.count_nonzero(inds), len(inds))
-    )
+    verbose and print(f"keeping {np.count_nonzero(inds)}/{len(inds)} polyhedra")
     return pointsi[inds], probi[inds], disti[inds], inds_original[inds]
 
 

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, QPointF, Signal
-from PySide6.QtGui import QTransform
+from PySide6.QtCore import QPointF, Qt, Signal
 from PySide6.QtWidgets import QGraphicsView
 
 from .slide_scene import SlideScene

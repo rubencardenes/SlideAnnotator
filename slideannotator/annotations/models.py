@@ -39,7 +39,7 @@ class CellMarker:
     @staticmethod
     def create(
         x: float, y: float, channel: str, w: float = 10.0, h: float = 10.0
-    ) -> "CellMarker":
+    ) -> CellMarker:
         return CellMarker(id=str(uuid.uuid4()), x=x, y=y, channel=channel, w=w, h=h)
 
 
@@ -58,7 +58,7 @@ class RegionAnnotation:
     @staticmethod
     def create(
         points: list[tuple[float, float]], channel: str
-    ) -> "RegionAnnotation":
+    ) -> RegionAnnotation:
         return RegionAnnotation(
             id=str(uuid.uuid4()), points=list(points), channel=channel
         )
@@ -79,11 +79,11 @@ class FOVAnnotation:
     type: str = "fov"
 
     @staticmethod
-    def create(x: float, y: float, w: float = 512.0, h: float = 512.0) -> "FOVAnnotation":
+    def create(x: float, y: float, w: float = 512.0, h: float = 512.0) -> FOVAnnotation:
         return FOVAnnotation(id=str(uuid.uuid4()), x=x, y=y, w=w, h=h)
 
 
-def _snapshot_ann(ann: "CellMarker | RegionAnnotation | FOVAnnotation"):
+def _snapshot_ann(ann: CellMarker | RegionAnnotation | FOVAnnotation):
     """Return a copy of an annotation for undo history."""
     if isinstance(ann, RegionAnnotation):
         return replace(ann, points=list(ann.points))
@@ -390,7 +390,7 @@ class AnnotationStore(QObject):
         self.is_dirty = True
         self.annotation_added.emit(ann.id)
 
-    def _load_annotation(self, ann: "CellMarker | RegionAnnotation | FOVAnnotation") -> None:
+    def _load_annotation(self, ann: CellMarker | RegionAnnotation | FOVAnnotation) -> None:
         """Insert a pre-built annotation (used by deserialization; bypasses undo stack)."""
         if isinstance(ann, CellMarker):
             self._markers[ann.id] = ann

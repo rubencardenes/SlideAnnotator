@@ -6,10 +6,9 @@ from pathlib import Path
 import numpy as np
 import pyvips
 
-from .base import _best_pyramid_level
+from ..utils.colors import assign_channel_color
 from .ome_tif import ImageReaderOmeTif
 from .protocol import ChannelInfo
-from ..utils.colors import assign_channel_color
 
 TILE_SIZE = 512
 logger = logging.getLogger(__name__)

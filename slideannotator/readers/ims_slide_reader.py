@@ -5,9 +5,9 @@ from pathlib import Path
 
 import numpy as np
 
+from ..utils.colors import assign_channel_color
 from .ims import ImageReaderIms
 from .protocol import ChannelInfo
-from ..utils.colors import assign_channel_color
 
 TILE_SIZE = 512
 logger = logging.getLogger(__name__)

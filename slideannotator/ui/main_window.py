@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
-
 from PySide6.QtCore import Qt, QThreadPool, QTimer
 from PySide6.QtGui import QImage
 from PySide6.QtWidgets import (
@@ -11,18 +10,12 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QSplitter,
-    QWidget,
     QVBoxLayout,
+    QWidget,
 )
 
 from ..annotations.database import AnnotationDB
 from ..annotations.models import AnnotationStore
-from ..inference.stardist import StarDistONNX
-from ..inference.stardist_worker import StarDistWorker
-from ..inference.CellONNXInference import CellONNXInferDFINE
-from ..inference.cell_det_worker import CellDetWorker
-from ..settings import get_settings
-from ..viewsettings import load_view_settings, save_view_settings
 from ..annotations.serializer import (
     export_cell_marker_annot,
     export_region_annot,
@@ -32,13 +25,19 @@ from ..annotations.serializer import (
 from ..compositing.compositor import ChannelSettings
 from ..graphics.slide_scene import SlideScene
 from ..graphics.slide_view import SlideView
+from ..inference.cell_det_worker import CellDetWorker
+from ..inference.CellONNXInference import CellONNXInferDFINE
+from ..inference.stardist import StarDistONNX
+from ..inference.stardist_worker import StarDistWorker
 from ..readers import open_slide
+from ..settings import get_settings
 from ..tiles.tile_cache import LRUCache
 from ..tiles.tile_manager import TileManager
 from ..tools.cell_marker_tool import CellMarkerTool
 from ..tools.pan_tool import PanTool
 from ..tools.region_tool import RegionTool
 from ..tools.select_tool import SelectTool
+from ..viewsettings import load_view_settings, save_view_settings
 from .annotation_toolbar import AnnotationToolbar
 from .channel_panel import ChannelPanel
 from .image_list_panel import ImageListPanel

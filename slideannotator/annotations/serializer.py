@@ -6,7 +6,7 @@ from typing import Any
 
 import numpy as np
 
-from .models import AnnotationStore, MARKER_BOX_HALF
+from .models import MARKER_BOX_HALF, AnnotationStore
 
 
 def needs_cell_marker_fovs(output_dir: Path, slide_name: str, store: AnnotationStore) -> bool:

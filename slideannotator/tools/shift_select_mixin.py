@@ -4,7 +4,7 @@ from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QBrush, QColor, QPen
 from PySide6.QtWidgets import QGraphicsRectItem
 
-from ..graphics.cell_marker_item import CellMarkerItem, HALO_EXTRA, SCREEN_RADIUS
+from ..graphics.cell_marker_item import HALO_EXTRA, SCREEN_RADIUS, CellMarkerItem
 from ..graphics.fov_item import FOVItem
 from ..graphics.region_item import RegionItem
 

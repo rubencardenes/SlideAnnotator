@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QRectF, QPointF, Qt
-from PySide6.QtGui import QBrush, QColor, QPainter, QPen, QTransform
+from PySide6.QtCore import QPointF, QRectF, Qt
+from PySide6.QtGui import QBrush, QColor, QPainter, QPen
 from PySide6.QtWidgets import QGraphicsItem, QStyleOptionGraphicsItem
 
 from ..annotations.models import MARKER_BOX_HALF

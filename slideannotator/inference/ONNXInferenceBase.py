@@ -7,7 +7,7 @@
 #              downsampled image (tissue detection)
 
 import abc
-from typing import Dict, List, Tuple, Iterable
+
 import numpy as np
 
 
@@ -27,7 +27,7 @@ class ONNXInferenceBase(abc.ABC):
 
     @classmethod
     @abc.abstractmethod
-    def _model_forward(self, input_dict: Dict, **kwargs):
+    def _model_forward(self, input_dict: dict, **kwargs):
         """inference function. Here is where the model
         inference(forward pass) takes place.
 
@@ -114,7 +114,7 @@ class ONNXInferenceBase(abc.ABC):
         self,
         img_arr: np.ndarray,
         tile_size: int,
-        pad_size: Tuple[int, int] = (0, 0),
+        pad_size: tuple[int, int] = (0, 0),
     ) -> np.ndarray:
         """pads image to tile_size if required. The padding adds zeros to the
            image so the original image remains in the top left corner

@@ -1,7 +1,9 @@
-from .ONNXInferenceBase import ONNXInferenceBase
-import onnxruntime as ort
 import numpy as np
+import onnxruntime as ort
 from loguru import logger
+
+from .ONNXInferenceBase import ONNXInferenceBase
+
 
 def nms(boxes, scores, iou_threshold):
     # Compute the area of the boxes and sort by score

@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-from __future__ import annotations
-
 from PySide6.QtCore import QPointF, QRectF, Qt
-from PySide6.QtGui import QColor, QPen, QPolygonF, QPixmap
+from PySide6.QtGui import QColor, QPen, QPixmap, QPolygonF
 from PySide6.QtWidgets import QGraphicsPolygonItem, QGraphicsScene
 
 from ..annotations.models import AnnotationStore, CellMarker, FOVAnnotation, RegionAnnotation

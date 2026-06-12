@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
-import pyvips
 from PySide6.QtCore import QObject, QRunnable, Signal, Slot
 
 from ..annotations.models import FOVAnnotation
