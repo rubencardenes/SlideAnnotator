@@ -37,8 +37,10 @@ class CellMarker:
     type: str = "cell_marker"
 
     @staticmethod
-    def create(x: float, y: float, channel: str) -> "CellMarker":
-        return CellMarker(id=str(uuid.uuid4()), x=x, y=y, channel=channel)
+    def create(
+        x: float, y: float, channel: str, w: float = 10.0, h: float = 10.0
+    ) -> "CellMarker":
+        return CellMarker(id=str(uuid.uuid4()), x=x, y=y, channel=channel, w=w, h=h)
 
 
 @dataclass
@@ -232,6 +234,56 @@ class AnnotationStore(QObject):
 
     # ------------------------------------------------------------------
     # Undo / Redo
+
+    def add_region_batch(
+        self, regions_data: list[tuple[list[tuple[float, float]], str]]
+    ) -> list[RegionAnnotation]:
+        """Add multiple regions as a single undoable action."""
+        if not regions_data:
+            return []
+        regions: list[RegionAnnotation] = []
+        self._is_undoing = True
+        try:
+            for points, channel in regions_data:
+                r = RegionAnnotation.create(points, channel)
+                self._regions[r.id] = r
+                self.is_dirty = True
+                self.annotation_added.emit(r.id)
+                regions.append(r)
+        finally:
+            self._is_undoing = False
+        snapshots = [_snapshot_ann(r) for r in regions]
+        ids = [r.id for r in regions]
+        self._push_undo(
+            lambda iids=ids: [self.delete(aid) for aid in iids],
+            lambda ss=snapshots: [self._restore(s) for s in ss],
+        )
+        return regions
+
+    def add_marker_batch(
+        self, markers_data: list[tuple[float, float, str, float, float]]
+    ) -> list[CellMarker]:
+        """Add multiple markers as a single undoable action (x, y, channel, w, h)."""
+        if not markers_data:
+            return []
+        markers: list[CellMarker] = []
+        self._is_undoing = True
+        try:
+            for x, y, channel, w, h in markers_data:
+                m = CellMarker.create(x, y, channel, w, h)
+                self._markers[m.id] = m
+                self.is_dirty = True
+                self.annotation_added.emit(m.id)
+                markers.append(m)
+        finally:
+            self._is_undoing = False
+        snapshots = [_snapshot_ann(m) for m in markers]
+        ids = [m.id for m in markers]
+        self._push_undo(
+            lambda iids=ids: [self.delete(aid) for aid in iids],
+            lambda ss=snapshots: [self._restore(s) for s in ss],
+        )
+        return markers
 
     def delete_batch(self, ann_ids: list[str]) -> None:
         """Delete multiple annotations as a single undoable action."""

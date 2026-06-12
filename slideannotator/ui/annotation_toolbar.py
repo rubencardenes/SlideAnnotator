@@ -234,6 +234,45 @@ def _icon_summary(size: int = _ICON_SZ) -> QIcon:
     return QIcon(pix)
 
 
+def _icon_cell_det_to_annot(size: int = _ICON_SZ) -> QIcon:
+    """Cross → rectangle: convert detections to region annotations."""
+    pix = QPixmap(size, size)
+    pix.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pix)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    color = QColor(255, 100, 80)
+
+    # Cross on the left
+    arm = size * 0.12
+    cx_c, cy_c = size * 0.22, size * 0.50
+    pen = QPen(color, size * 0.09)
+    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+    p.setPen(pen)
+    p.drawLine(QPointF(cx_c - arm, cy_c), QPointF(cx_c + arm, cy_c))
+    p.drawLine(QPointF(cx_c, cy_c - arm), QPointF(cx_c, cy_c + arm))
+
+    # Arrow in the middle
+    pen2 = QPen(color, size * 0.07)
+    pen2.setCapStyle(Qt.PenCapStyle.RoundCap)
+    p.setPen(pen2)
+    ax1, ax2, ay = size * 0.38, size * 0.56, size * 0.50
+    p.drawLine(QPointF(ax1, ay), QPointF(ax2, ay))
+    ah = size * 0.08
+    p.drawLine(QPointF(ax2 - ah, ay - ah), QPointF(ax2, ay))
+    p.drawLine(QPointF(ax2 - ah, ay + ah), QPointF(ax2, ay))
+
+    # Rectangle on the right
+    pen3 = QPen(color, size * 0.09)
+    pen3.setJoinStyle(Qt.PenJoinStyle.MiterJoin)
+    p.setPen(pen3)
+    p.setBrush(QColor(255, 100, 80, 40))
+    rw, rh = size * 0.28, size * 0.36
+    p.drawRect(QRectF(size * 0.65, size * 0.50 - rh / 2, rw, rh))
+
+    p.end()
+    return QIcon(pix)
+
+
 def _icon_stardist_run(size: int = _ICON_SZ) -> QIcon:
     """Nuclear polygon blob — resembles a cell nucleus outline."""
     pix = QPixmap(size, size)
@@ -293,6 +332,58 @@ def _icon_stardist_toggle(size: int = _ICON_SZ) -> QIcon:
     p.drawPath(path)
     p.setPen(QPen(color, size * 0.07))
     p.setBrush(QColor(255, 165, 30, 70))
+    p.drawEllipse(QPointF(c, c), size * 0.16, size * 0.16)
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(color)
+    p.drawEllipse(QPointF(c, c), size * 0.07, size * 0.07)
+    p.end()
+    return QIcon(pix)
+
+
+def _icon_cell_det_run(size: int = _ICON_SZ) -> QIcon:
+    """Several small crosses — object detection / cell dots."""
+    pix = QPixmap(size, size)
+    pix.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pix)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    color = QColor(255, 100, 80)
+    pen = QPen(color, size * 0.09)
+    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+    p.setPen(pen)
+    arm = size * 0.13
+    centres = [
+        (size * 0.28, size * 0.28),
+        (size * 0.72, size * 0.34),
+        (size * 0.38, size * 0.70),
+        (size * 0.68, size * 0.68),
+    ]
+    for cx, cy in centres:
+        p.drawLine(QPointF(cx - arm, cy), QPointF(cx + arm, cy))
+        p.drawLine(QPointF(cx, cy - arm), QPointF(cx, cy + arm))
+    p.end()
+    return QIcon(pix)
+
+
+def _icon_cell_det_toggle(size: int = _ICON_SZ) -> QIcon:
+    """Eye icon in coral red — toggle cell detection visibility."""
+    pix = QPixmap(size, size)
+    pix.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pix)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    c = size / 2.0
+    color = QColor(255, 100, 80)
+    pen = QPen(color, size * 0.10)
+    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+    p.setPen(pen)
+    p.setBrush(Qt.BrushStyle.NoBrush)
+    rx, ry = size * 0.42, size * 0.24
+    path = QPainterPath()
+    path.moveTo(c - rx, c)
+    path.cubicTo(c - rx * 0.4, c - ry * 2.2, c + rx * 0.4, c - ry * 2.2, c + rx, c)
+    path.cubicTo(c + rx * 0.4, c + ry * 2.2, c - rx * 0.4, c + ry * 2.2, c - rx, c)
+    p.drawPath(path)
+    p.setPen(QPen(color, size * 0.07))
+    p.setBrush(QColor(255, 100, 80, 70))
     p.drawEllipse(QPointF(c, c), size * 0.16, size * 0.16)
     p.setPen(Qt.PenStyle.NoPen)
     p.setBrush(color)
@@ -436,6 +527,9 @@ class AnnotationToolbar(QToolBar):
     summary_requested = Signal()
     run_stardist_requested = Signal()
     stardist_toggled = Signal(bool)
+    run_cell_det_requested = Signal()
+    cell_det_toggled = Signal(bool)
+    cell_det_to_annot_requested = Signal()
     quit_requested = Signal()
     undo_requested = Signal()
     redo_requested = Signal()
@@ -529,6 +623,27 @@ class AnnotationToolbar(QToolBar):
         self.addWidget(self._stardist_toggle_btn)
         self.addWidget(self._stardist_settings_btn)
 
+        self.addSeparator()
+        self._cell_det_run_btn = _make_tool_btn(
+            _icon_cell_det_run(), "Run Cell Detection on FOVs", checkable=False
+        )
+        self._cell_det_toggle_btn = _make_tool_btn(
+            _icon_cell_det_toggle(), "Toggle cell detections [coral eye]", checkable=True
+        )
+        self._cell_det_to_annot_btn = _make_tool_btn(
+            _icon_cell_det_to_annot(), "Convert detections to region annotations", checkable=False
+        )
+        self._cell_det_toggle_btn.setChecked(True)
+        self._cell_det_run_btn.setEnabled(False)
+        self._cell_det_toggle_btn.setEnabled(False)
+        self._cell_det_to_annot_btn.setEnabled(False)
+        self._cell_det_run_btn.clicked.connect(self.run_cell_det_requested)
+        self._cell_det_toggle_btn.toggled.connect(self.cell_det_toggled)
+        self._cell_det_to_annot_btn.clicked.connect(self.cell_det_to_annot_requested)
+        self.addWidget(self._cell_det_run_btn)
+        self.addWidget(self._cell_det_toggle_btn)
+        self.addWidget(self._cell_det_to_annot_btn)
+
         spacer = QWidget()
         spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         self.addWidget(spacer)
@@ -559,9 +674,17 @@ class AnnotationToolbar(QToolBar):
         self._stardist_run_btn.setEnabled(enabled)
         self._stardist_toggle_btn.setEnabled(enabled)
         self._stardist_settings_btn.setEnabled(enabled)
+        self._cell_det_run_btn.setEnabled(enabled)
+        self._cell_det_toggle_btn.setEnabled(enabled)
+
+    def set_cell_det_convert_enabled(self, enabled: bool) -> None:
+        self._cell_det_to_annot_btn.setEnabled(enabled)
 
     def set_stardist_running(self, running: bool) -> None:
         self._stardist_run_btn.setEnabled(not running)
+
+    def set_cell_det_running(self, running: bool) -> None:
+        self._cell_det_run_btn.setEnabled(not running)
 
     def toggle_annotations_visibility(self) -> None:
         self._eye_btn.setChecked(not self._eye_btn.isChecked())

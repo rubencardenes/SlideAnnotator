@@ -7,6 +7,11 @@ from pathlib import Path
 from .models import AnnotationStore, CellMarker, FOVAnnotation, RegionAnnotation
 
 _SCHEMA = """
+CREATE TABLE IF NOT EXISTS slide_paths (
+    slide_name TEXT PRIMARY KEY,
+    slide_path TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS annotations (
     id          TEXT PRIMARY KEY,
     type        TEXT NOT NULL,
@@ -138,6 +143,39 @@ class AnnotationDB:
             count += 1
         store.set_dirty(False)
         return count
+
+    def record_slide_path(self, slide_name: str, slide_path: Path) -> None:
+        self._conn.execute(
+            "INSERT OR REPLACE INTO slide_paths (slide_name, slide_path) VALUES (?,?)",
+            (slide_name, str(slide_path)),
+        )
+        self._conn.commit()
+
+    def get_slide_paths(self) -> dict[str, "Path | None"]:
+        """Return {slide_name: Path} for every slide that has annotations.
+
+        Path is None when the slide file location was never recorded.
+        """
+        rows = self._conn.execute(
+            "SELECT a.slide_name, p.slide_path "
+            "FROM (SELECT DISTINCT slide_name FROM annotations) a "
+            "LEFT JOIN slide_paths p ON a.slide_name = p.slide_name "
+            "ORDER BY a.slide_name"
+        ).fetchall()
+        return {row[0]: Path(row[1]) if row[1] else None for row in rows}
+
+    def get_annotation_counts_by_slide(self) -> dict[str, dict[str, int]]:
+        """Return {slide_name: {'cell_marker': N, 'region': M, 'fov': K}} for all slides."""
+        rows = self._conn.execute(
+            "SELECT slide_name, type, COUNT(*) FROM annotations GROUP BY slide_name, type"
+        ).fetchall()
+        result: dict[str, dict[str, int]] = {}
+        for slide_name, ann_type, count in rows:
+            if slide_name not in result:
+                result[slide_name] = {"cell_marker": 0, "region": 0, "fov": 0}
+            if ann_type in ("cell_marker", "region", "fov"):
+                result[slide_name][ann_type] = count
+        return result
 
     def close(self) -> None:
         self._conn.close()

@@ -19,9 +19,16 @@ from ..annotations.database import AnnotationDB
 from ..annotations.models import AnnotationStore
 from ..inference.stardist import StarDistONNX
 from ..inference.stardist_worker import StarDistWorker
+from ..inference.CellONNXInference import CellONNXInferDFINE
+from ..inference.cell_det_worker import CellDetWorker
 from ..settings import get_settings
 from ..viewsettings import load_view_settings, save_view_settings
-from ..annotations.serializer import export_markers_txt, export_structured, load_structured
+from ..annotations.serializer import (
+    export_cell_marker_annot,
+    export_region_annot,
+    needs_cell_marker_fovs,
+    needs_region_fovs,
+)
 from ..compositing.compositor import ChannelSettings
 from ..graphics.slide_scene import SlideScene
 from ..graphics.slide_view import SlideView
@@ -34,6 +41,7 @@ from ..tools.region_tool import RegionTool
 from ..tools.select_tool import SelectTool
 from .annotation_toolbar import AnnotationToolbar
 from .channel_panel import ChannelPanel
+from .image_list_panel import ImageListPanel
 from .stardist_settings_dialog import StarDistSettingsDialog
 from .summary_dialog import SummaryDialog
 
@@ -56,6 +64,8 @@ class MainWindow(QMainWindow):
         self._stardist_model: StarDistONNX | None = None
         self._stardist_outline_color = None   # persists across image loads
         self._stardist_outline_width = None
+        self._cell_det_model: CellONNXInferDFINE | None = None
+        self._cell_det_boxes: list[tuple[float, float, float, float]] = []
         self._db: AnnotationDB | None = None
 
         self._thread_pool = QThreadPool.globalInstance()
@@ -86,6 +96,9 @@ class MainWindow(QMainWindow):
         self._toolbar.summary_requested.connect(self._show_summary)
         self._toolbar.run_stardist_requested.connect(self._run_stardist)
         self._toolbar.stardist_toggled.connect(self._on_stardist_toggled)
+        self._toolbar.run_cell_det_requested.connect(self._run_cell_det)
+        self._toolbar.cell_det_toggled.connect(self._on_cell_det_toggled)
+        self._toolbar.cell_det_to_annot_requested.connect(self._cell_det_to_annot)
         self._toolbar.quit_requested.connect(self.close)
         self._toolbar.undo_requested.connect(self._undo)
         self._toolbar.redo_requested.connect(self._redo)
@@ -93,6 +106,16 @@ class MainWindow(QMainWindow):
         self.addToolBar(self._toolbar)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
+
+        self._image_list_panel = ImageListPanel(get_db=self._get_db)
+        self._image_list_panel.setMinimumWidth(180)
+        self._image_list_panel.setMaximumWidth(320)
+        self._image_list_panel.image_opened.connect(self.open_image)
+
+        self._view = SlideView()
+        self._view.space_pressed.connect(self._toggle_annotations)
+        self._view.b_pressed.connect(self._toggle_marker_boxes)
+        self._view.fov_requested.connect(self._on_fov_requested)
 
         self._channel_panel = ChannelPanel()
         self._channel_panel.setMinimumWidth(200)
@@ -104,13 +127,13 @@ class MainWindow(QMainWindow):
         self._channel_panel.channel_range_changed.connect(self._on_channel_range)
         self._channel_panel.channel_selected.connect(self._on_active_channel)
 
-        self._view = SlideView()
-        self._view.space_pressed.connect(self._toggle_annotations)
-        self._view.b_pressed.connect(self._toggle_marker_boxes)
-        splitter.addWidget(self._channel_panel)
+        splitter.addWidget(self._image_list_panel)
         splitter.addWidget(self._view)
-        splitter.setSizes([230, 1170])
+        splitter.addWidget(self._channel_panel)
+        splitter.setSizes([230, 940, 230])
         layout.addWidget(splitter)
+
+        self._image_list_panel.refresh()
 
     def _build_menus(self) -> None:
         mb = self.menuBar()
@@ -146,15 +169,13 @@ class MainWindow(QMainWindow):
         self._load_action.triggered.connect(self._load_from_db)
         self._load_action.setEnabled(False)
 
-        self._export_annot_action = file_menu.addAction("&Export Annotations…")
-        self._export_annot_action.setShortcut("Ctrl+Shift+E")
-        self._export_annot_action.triggered.connect(self._export_annotations)
-        self._export_annot_action.setEnabled(False)
+        self._export_cell_marker_action = file_menu.addAction("Export Cell Marker &Annot…")
+        self._export_cell_marker_action.setShortcut("Ctrl+E")
+        self._export_cell_marker_action.triggered.connect(self._export_cell_marker_annot)
 
-        self._export_action = file_menu.addAction("Export Cell Markers (&txt)…")
-        self._export_action.setShortcut("Ctrl+E")
-        self._export_action.triggered.connect(self._export_markers)
-        self._export_action.setEnabled(False)
+        self._export_region_action = file_menu.addAction("Export &Region Annot…")
+        self._export_region_action.setShortcut("Ctrl+Shift+E")
+        self._export_region_action.triggered.connect(self._export_region_annot)
 
         self._save_fov_action = file_menu.addAction("Save &FOV Images…")
         self._save_fov_action.triggered.connect(self._save_fov_images)
@@ -251,16 +272,14 @@ class MainWindow(QMainWindow):
             self._on_tool_changed("pan")
             self._toolbar._pan_btn.setChecked(True)
 
-            # Reset stardist toggle button state for new image
+            # Reset inference toggle/convert button states for new image
             self._toolbar._stardist_toggle_btn.setChecked(True)
-
-            # Connect FOV creation from view key shortcut
-            self._view.fov_requested.connect(self._on_fov_requested)
+            self._toolbar._cell_det_toggle_btn.setChecked(True)
+            self._cell_det_boxes = []
+            self._toolbar.set_cell_det_convert_enabled(False)
 
             self._save_action.setEnabled(True)
             self._load_action.setEnabled(True)
-            self._export_annot_action.setEnabled(True)
-            self._export_action.setEnabled(True)
             self._save_fov_action.setEnabled(True)
             self._toolbar.set_save_load_enabled(True)
             self.setWindowTitle(f"SlideAnnotator — {path.name}")
@@ -285,16 +304,37 @@ class MainWindow(QMainWindow):
         self._redo_action.setEnabled(can_redo)
         self._toolbar.set_undo_redo_enabled(can_undo, can_redo)
 
-    def _export_markers(self) -> None:
-        if self._store is None or self._slide_path is None:
-            return
-        txt_path = self._slide_path.with_suffix(
-            self._slide_path.suffix + ".markers.txt"
-        )
-        export_markers_txt(txt_path, self._slide_path, self._store)
-        QMessageBox.information(
-            self, "Export Complete", f"Markers exported to:\n{txt_path}"
-        )
+    def _export_cell_marker_annot(self) -> None:
+        output_dir = get_settings().annotations_dir
+        output_dir.mkdir(parents=True, exist_ok=True)
+        db = self._get_db()
+        current_stem = self._slide_path.stem if self._slide_path else None
+        saved = errors = 0
+        for slide_name, slide_path in db.get_slide_paths().items():
+            temp_store = AnnotationStore()
+            db.load_for_slide(slide_name, temp_store)
+            reader = None
+            opened = False
+            if slide_name == current_stem:
+                reader = self._reader
+            elif needs_cell_marker_fovs(output_dir, slide_name, temp_store):
+                if slide_path and slide_path.exists():
+                    try:
+                        reader = open_slide(slide_path)
+                        opened = True
+                    except Exception:
+                        pass
+            try:
+                s, e = export_cell_marker_annot(output_dir, slide_name, temp_store, reader)
+            finally:
+                if opened and reader is not None:
+                    reader.close()
+            saved += s
+            errors += e
+        msg = f"Exported to:\n{output_dir / 'Cell Marker Annotations'}\n\n{saved} file(s) written."
+        if errors:
+            msg += f"\n({errors} error(s))"
+        QMessageBox.information(self, "Cell Marker Annotations Exported", msg)
 
     def _save_view_settings(self) -> None:
         if self._slide_path is None or self._reader is None:
@@ -309,8 +349,17 @@ class MainWindow(QMainWindow):
     def _save_to_db(self) -> None:
         if self._store is None or self._slide_path is None:
             return
-        count = self._get_db().save_all(self._store, self._slide_path.stem)
+        db = self._get_db()
+        count = db.save_all(self._store, self._slide_path.stem)
+        db.record_slide_path(self._slide_path.stem, self._slide_path)
         self._store.set_dirty(False)
+        slide_name = self._slide_path.stem
+        self._image_list_panel.update_counts_for(
+            slide_name,
+            len(self._store.markers),
+            len(self._store.regions),
+            len(self._store.fovs),
+        )
         QMessageBox.information(
             self, "Annotations Saved",
             f"Saved {count} annotation(s) to database."
@@ -334,18 +383,37 @@ class MainWindow(QMainWindow):
                 "No saved annotations found for this image."
             )
 
-    def _export_annotations(self) -> None:
-        if self._store is None or self._slide_path is None or self._reader is None:
-            return
+    def _export_region_annot(self) -> None:
         output_dir = get_settings().annotations_dir
         output_dir.mkdir(parents=True, exist_ok=True)
-        saved, errors = export_structured(
-            output_dir, self._slide_path, self._store, self._reader
-        )
-        msg = f"Exported to:\n{output_dir}\n\n{saved} file(s) written."
+        db = self._get_db()
+        current_stem = self._slide_path.stem if self._slide_path else None
+        saved = errors = 0
+        for slide_name, slide_path in db.get_slide_paths().items():
+            temp_store = AnnotationStore()
+            db.load_for_slide(slide_name, temp_store)
+            reader = None
+            opened = False
+            if slide_name == current_stem:
+                reader = self._reader
+            elif needs_region_fovs(output_dir, slide_name, temp_store):
+                if slide_path and slide_path.exists():
+                    try:
+                        reader = open_slide(slide_path)
+                        opened = True
+                    except Exception:
+                        pass
+            try:
+                s, e = export_region_annot(output_dir, slide_name, temp_store, reader)
+            finally:
+                if opened and reader is not None:
+                    reader.close()
+            saved += s
+            errors += e
+        msg = f"Exported to:\n{output_dir / 'Region Annotations'}\n\n{saved} file(s) written."
         if errors:
             msg += f"\n({errors} error(s))"
-        QMessageBox.information(self, "Annotations Exported", msg)
+        QMessageBox.information(self, "Region Annotations Exported", msg)
 
     def _show_summary(self) -> None:
         dlg = SummaryDialog(parent=self)
@@ -558,7 +626,7 @@ class MainWindow(QMainWindow):
             return
         from PySide6.QtGui import QColor as _QColor
         cur_color = self._stardist_outline_color or _QColor(0, 230, 180)
-        cur_width = self._stardist_outline_width or 1
+        cur_width = self._stardist_outline_width or 2
         dlg = StarDistSettingsDialog(cur_color, cur_width, self)
         if dlg.exec():
             self._stardist_outline_color = dlg.selected_color
@@ -566,6 +634,108 @@ class MainWindow(QMainWindow):
             scene.set_stardist_style(
                 self._stardist_outline_color, self._stardist_outline_width
             )
+
+    # ------------------------------------------------------------------
+    def _run_cell_det(self) -> None:
+        if self._store is None or self._reader is None:
+            return
+
+        fovs = list(self._store.fovs.values())
+        if not fovs:
+            QMessageBox.information(self, "No FOVs", "Add FOV annotations first (F key).")
+            return
+
+        model_path = get_settings().cell_det_model
+        if model_path is None or not model_path.exists():
+            QMessageBox.warning(
+                self, "Model Not Found",
+                f"Cell detection model not found:\n{model_path}\n\nCheck cell_det_model in settings.yaml."
+            )
+            return
+
+        if self._cell_det_model is None:
+            try:
+                self._cell_det_model = CellONNXInferDFINE(str(model_path), device="cpu")
+            except Exception as exc:
+                QMessageBox.critical(self, "Model Load Error", str(exc))
+                return
+
+        # Locate DAPI/Hoechst channel and the active marker channel.
+        dapi_idx = None
+        for i, ch in enumerate(self._reader.channels):
+            n = ch.name.lower()
+            if "dapi" in n or "hoechst" in n:
+                dapi_idx = i
+                break
+        if dapi_idx is None:
+            QMessageBox.warning(
+                self, "No DAPI/Hoechst Channel",
+                "No DAPI or Hoechst channel found. Cannot run cell detection."
+            )
+            return
+
+        marker_idx = None
+        for i, ch in enumerate(self._reader.channels):
+            if ch.name == self._active_channel:
+                marker_idx = i
+                break
+        if marker_idx is None:
+            QMessageBox.warning(
+                self, "No Active Channel",
+                "No active channel selected. Click a channel in the channel panel first."
+            )
+            return
+
+        channel_r = marker_idx  # tile[0] = marker  (red channel)
+        channel_g = None        # tile[1] = zeros   (green channel empty)
+        channel_b = dapi_idx    # tile[2] = DAPI    (blue channel)
+
+        self._toolbar.set_cell_det_running(True)
+        worker = CellDetWorker(
+            self._cell_det_model, fovs, self._reader, channel_r, channel_g, channel_b
+        )
+        worker.signals.finished.connect(self._on_cell_det_finished)
+        worker.signals.error.connect(self._on_cell_det_error)
+        self._thread_pool.start(worker)
+
+    def _on_cell_det_finished(self, boxes: list) -> None:
+        self._toolbar.set_cell_det_running(False)
+        self._cell_det_boxes = boxes
+        centers = [((x0 + x1) / 2.0, (y0 + y1) / 2.0) for x0, y0, x1, y1 in boxes]
+        scene = self._view.scene()
+        if isinstance(scene, SlideScene):
+            scene.set_cell_det_points(centers)
+        self._toolbar.set_cell_det_convert_enabled(bool(boxes))
+        QMessageBox.information(self, "Detection Complete", f"Detected {len(boxes)} cell(s) across all FOVs.")
+
+    def _on_cell_det_error(self, msg: str) -> None:
+        self._toolbar.set_cell_det_running(False)
+        QMessageBox.critical(self, "Detection Error", msg)
+
+    def _on_cell_det_toggled(self, visible: bool) -> None:
+        scene = self._view.scene()
+        if isinstance(scene, SlideScene):
+            scene.set_cell_det_visible(visible)
+
+    def _cell_det_to_annot(self) -> None:
+        if not self._cell_det_boxes or self._store is None:
+            return
+        markers_data = [
+            (
+                (x0 + x1) / 2.0,
+                (y0 + y1) / 2.0,
+                self._active_channel,
+                x1 - x0,
+                y1 - y0,
+            )
+            for x0, y0, x1, y1 in self._cell_det_boxes
+        ]
+        self._store.add_marker_batch(markers_data)
+        self._update_undo_redo_state()
+        QMessageBox.information(
+            self, "Annotations Created",
+            f"Created {len(markers_data)} cell marker annotation(s)."
+        )
 
     # ------------------------------------------------------------------
     def _prompt_save(self) -> bool:

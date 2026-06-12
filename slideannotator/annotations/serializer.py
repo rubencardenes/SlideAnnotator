@@ -9,33 +9,34 @@ import numpy as np
 from .models import AnnotationStore, MARKER_BOX_HALF
 
 
-def export_markers_txt(txt_path: Path, slide_path: Path, store: AnnotationStore) -> None:
-    """Export cell markers inside each FOV to a text file.
+def needs_cell_marker_fovs(output_dir: Path, slide_name: str, store: AnnotationStore) -> bool:
+    """Return True if any expected cell-marker FOV image is missing from disk."""
+    fovs_dir = output_dir / "Cell Marker Annotations" / "FOVs"
+    for channel in {m.channel for m in store.markers.values()}:
+        for fov in store.fovs.values():
+            has_marker = any(
+                m.channel == channel
+                and fov.x <= m.x <= fov.x + fov.w
+                and fov.y <= m.y <= fov.y + fov.h
+                for m in store.markers.values()
+            )
+            if has_marker:
+                path = fovs_dir / f"{slide_name}_{channel}_{int(round(fov.x))}_{int(round(fov.y))}.png"
+                if not path.exists():
+                    return True
+    return False
 
-    Format per line:  image_name_x_y: xmin,ymin,xmax,ymax xmin,ymin,xmax,ymax ...
-    Only FOVs that contain at least one marker are written.
-    """
-    image_name = slide_path.stem
-    lines: list[str] = []
 
-    for fov in store.fovs.values():
-        fx1, fy1 = fov.x, fov.y
-        fx2, fy2 = fov.x + fov.w, fov.y + fov.h
-
-        boxes: list[str] = []
-        for m in store.markers.values():
-            if fx1 <= m.x <= fx2 and fy1 <= m.y <= fy2:
-                bx1 = int(round(m.x - MARKER_BOX_HALF))
-                by1 = int(round(m.y - MARKER_BOX_HALF))
-                bx2 = int(round(m.x + MARKER_BOX_HALF))
-                by2 = int(round(m.y + MARKER_BOX_HALF))
-                boxes.append(f"{bx1},{by1},{bx2},{by2}")
-
-        if boxes:
-            key = f"{image_name}_{int(round(fov.x))}_{int(round(fov.y))}"
-            lines.append(f"{key}: {' '.join(boxes)}")
-
-    txt_path.write_text("\n".join(lines) + ("\n" if lines else ""))
+def needs_region_fovs(output_dir: Path, slide_name: str, store: AnnotationStore) -> bool:
+    """Return True if any expected region FOV image is missing from disk."""
+    fovs_dir = output_dir / "Region Annotations" / "FOVs"
+    channels = {r.channel for r in store.regions.values() if r.points}
+    for channel in channels:
+        for fov in store.fovs.values():
+            path = fovs_dir / f"{slide_name}_{channel}_{int(round(fov.x))}_{int(round(fov.y))}.png"
+            if not path.exists():
+                return True
+    return False
 
 
 def _find_dapi_channel(reader: Any) -> int | None:
@@ -71,38 +72,32 @@ def _save_fov_rgb16(
         return False
 
 
-def export_structured(
+def export_cell_marker_annot(
     output_dir: Path,
-    slide_path: Path,
+    slide_name: str,
     store: AnnotationStore,
-    reader: Any,
+    reader: Any | None = None,
 ) -> tuple[int, int]:
-    """Export to structured directory format.
+    """Export cell marker annotations to 'Cell Marker Annotations' directory.
 
-    Returns (saved_count, error_count).
+    Writes per-channel txt files to Annot/ and, when reader is provided, FOV
+    images to FOVs/.  Returns (saved_count, error_count).
     """
-    from PySide6.QtCore import QPointF, Qt
-    from PySide6.QtGui import QBrush, QImage, QPainter, QPolygonF
-
-    stem = slide_path.stem
-
-    marker_annot_dir = output_dir / "Marker Annotations" / "Annot"
-    marker_fovs_dir = output_dir / "Marker Annotations" / "FOVs"
-    region_annot_dir = output_dir / "Region Annotations" / "Annot"
-    region_fovs_dir = output_dir / "Region Annotations" / "FOVs"
-    for d in (marker_annot_dir, marker_fovs_dir, region_annot_dir, region_fovs_dir):
+    stem = slide_name
+    annot_dir = output_dir / "Cell Marker Annotations" / "Annot"
+    fovs_dir = output_dir / "Cell Marker Annotations" / "FOVs"
+    for d in (annot_dir, fovs_dir):
         d.mkdir(parents=True, exist_ok=True)
 
-    ch_index: dict[str, int] = {ch.name: i for i, ch in enumerate(reader.channels)}
-    dapi_ch_idx = _find_dapi_channel(reader)
+    ch_index: dict[str, int] = {ch.name: i for i, ch in enumerate(reader.channels)} if reader else {}
+    dapi_ch_idx = _find_dapi_channel(reader) if reader else None
     saved = errors = 0
 
-    # --- Marker Annotations ---
     marker_channels = {m.channel for m in store.markers.values()}
     for channel in sorted(marker_channels):
         ch_idx = ch_index.get(channel)
-
         lines: list[str] = []
+
         for fov in store.fovs.values():
             fx1, fy1 = fov.x, fov.y
             fx2, fy2 = fov.x + fov.w, fov.y + fov.h
@@ -119,23 +114,48 @@ def export_structured(
             if boxes:
                 key = f"{stem}_{int(round(fov.x))}_{int(round(fov.y))}"
                 lines.append(f"{key}: {' '.join(boxes)}")
-
-                if ch_idx is not None:
-                    fov_path = marker_fovs_dir / f"{stem}_{channel}_{int(round(fov.x))}_{int(round(fov.y))}.png"
-                    ok = _save_fov_rgb16(
-                        fov_path, reader, ch_idx, dapi_ch_idx,
-                        int(fov.x), int(fov.y), int(fov.w), int(fov.h),
-                    )
-                    saved += ok
-                    errors += not ok
+                if reader and ch_idx is not None:
+                    fov_path = fovs_dir / f"{stem}_{channel}_{int(round(fov.x))}_{int(round(fov.y))}.png"
+                    if not fov_path.exists():
+                        ok = _save_fov_rgb16(
+                            fov_path, reader, ch_idx, dapi_ch_idx,
+                            int(fov.x), int(fov.y), int(fov.w), int(fov.h),
+                        )
+                        saved += ok
+                        errors += not ok
 
         if lines:
-            txt_path = marker_annot_dir / f"{stem}_{channel}.txt"
+            txt_path = annot_dir / f"{stem}_{channel}.txt"
             txt_path.write_text("\n".join(lines) + "\n")
             saved += 1
 
-    # --- Region Annotations ---
-    # Group regions by channel; skip channels with no valid regions
+    return saved, errors
+
+
+def export_region_annot(
+    output_dir: Path,
+    slide_name: str,
+    store: AnnotationStore,
+    reader: Any | None = None,
+) -> tuple[int, int]:
+    """Export region annotations to 'Region Annotations' directory.
+
+    Writes binary masks to Annot/ and, when reader is provided, FOV images to
+    FOVs/.  Returns (saved_count, error_count).
+    """
+    from PySide6.QtCore import QPointF, Qt
+    from PySide6.QtGui import QBrush, QImage, QPainter, QPolygonF
+
+    stem = slide_name
+    annot_dir = output_dir / "Region Annotations" / "Annot"
+    fovs_dir = output_dir / "Region Annotations" / "FOVs"
+    for d in (annot_dir, fovs_dir):
+        d.mkdir(parents=True, exist_ok=True)
+
+    ch_index: dict[str, int] = {ch.name: i for i, ch in enumerate(reader.channels)} if reader else {}
+    dapi_ch_idx = _find_dapi_channel(reader) if reader else None
+    saved = errors = 0
+
     regions_by_channel: dict[str, list] = {}
     for region in store.regions.values():
         if region.points:
@@ -150,15 +170,14 @@ def export_structured(
             x_key = int(round(fx))
             y_key = int(round(fy))
 
-            # FOV image for this channel
-            if ch_idx is not None:
-                fov_path = region_fovs_dir / f"{stem}_{channel}_{x_key}_{y_key}.png"
-                ok = _save_fov_rgb16(fov_path, reader, ch_idx, dapi_ch_idx, int(fx), int(fy), fw, fh)
-                saved += ok
-                errors += not ok
+            if reader and ch_idx is not None:
+                fov_path = fovs_dir / f"{stem}_{channel}_{x_key}_{y_key}.png"
+                if not fov_path.exists():
+                    ok = _save_fov_rgb16(fov_path, reader, ch_idx, dapi_ch_idx, int(fx), int(fy), fw, fh)
+                    saved += ok
+                    errors += not ok
 
-            # Mask: all regions of this channel overlapping the FOV (empty mask if none)
-            mask_path = region_annot_dir / f"{stem}_{channel}_{x_key}_{y_key}.png"
+            mask_path = annot_dir / f"{stem}_{channel}_{x_key}_{y_key}.png"
             try:
                 mask_img = QImage(fw, fh, QImage.Format.Format_Grayscale8)
                 mask_img.fill(0)
@@ -169,7 +188,6 @@ def export_structured(
                     pts = region.points
                     xs = [p[0] for p in pts]
                     ys = [p[1] for p in pts]
-                    # Skip regions whose bounding box doesn't intersect the FOV
                     if max(xs) < fx or min(xs) > fx + fw or max(ys) < fy or min(ys) > fy + fh:
                         continue
                     poly = QPolygonF([QPointF(p[0] - fx, p[1] - fy) for p in pts])
@@ -180,9 +198,8 @@ def export_structured(
             except Exception:
                 errors += 1
 
-    # Save region polygon points as JSON so they can be reloaded
     if store.regions:
-        regions_json_path = region_annot_dir / f"{stem}_regions.json"
+        regions_json_path = annot_dir / f"{stem}_regions.json"
         regions_data = [
             {"id": r.id, "channel": r.channel, "points": [[p[0], p[1]] for p in r.points]}
             for r in store.regions.values()

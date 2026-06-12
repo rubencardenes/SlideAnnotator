@@ -1,3 +1,5 @@
 annotations_dir: ~/data/annotations
 stardist_model: ~/data/models/stardist-versatile-fluo_dynamic.onnx
 db_path: ~/data/annotations/annotations.db
+data_dir: ~/data/
+cell_det_model: ~/data/models/dfine_non_nuclear_ep99_v37.onnx

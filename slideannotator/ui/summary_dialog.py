@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import json
-from dataclasses import dataclass, field
+import sqlite3
 from pathlib import Path
 
 from PySide6.QtCore import Qt
@@ -17,92 +16,37 @@ from PySide6.QtWidgets import (
 from ..settings import get_settings
 
 
-@dataclass
-class _MarkerStats:
-    slides: set[str] = field(default_factory=set)
-    channels: set[str] = field(default_factory=set)
-    marker_count: int = 0
-    fovs: set[tuple] = field(default_factory=set)  # (slide_stem, x, y)
+def _query_db(db_path: Path) -> dict[str, dict]:
+    """Return per-type counts from the annotations DB. Returns empty dicts if DB missing."""
+    result: dict[str, dict] = {
+        "cell_marker": {"count": 0, "slides": 0, "biomarkers": 0, "biomarker_names": []},
+        "region": {"count": 0, "slides": 0},
+        "fov": {"count": 0, "slides": 0},
+    }
+    if not db_path.exists():
+        return result
 
+    conn = sqlite3.connect(str(db_path))
+    try:
+        rows = conn.execute(
+            "SELECT type, COUNT(*) AS n, COUNT(DISTINCT slide_name) AS s "
+            "FROM annotations GROUP BY type"
+        ).fetchall()
+        for ann_type, n, s in rows:
+            if ann_type in result:
+                result[ann_type]["count"] = n
+                result[ann_type]["slides"] = s
 
-@dataclass
-class _RegionStats:
-    slides: set[str] = field(default_factory=set)
-    region_count: int = 0
-    fovs: set[tuple] = field(default_factory=set)  # (slide_stem, x, y)
+        marker_bio = conn.execute(
+            "SELECT biomarker FROM annotations WHERE type = 'cell_marker' "
+            "AND biomarker != '' GROUP BY biomarker ORDER BY biomarker"
+        ).fetchall()
+        result["cell_marker"]["biomarkers"] = len(marker_bio)
+        result["cell_marker"]["biomarker_names"] = [r[0] for r in marker_bio]
+    finally:
+        conn.close()
+    return result
 
-
-def _scan_dir(annot_dir: Path) -> tuple[_MarkerStats, _RegionStats]:
-    ms = _MarkerStats()
-    rs = _RegionStats()
-
-    # ------------------------------------------------------------------
-    # Marker Annotations/Annot/{stem}_{channel}.txt
-    # Each line:  {stem}_{fov_x}_{fov_y}: box box ...
-    # ------------------------------------------------------------------
-    marker_annot = annot_dir / "Marker Annotations" / "Annot"
-    if marker_annot.exists():
-        for txt in sorted(marker_annot.glob("*.txt")):
-            # split off channel (last underscore component)
-            parts = txt.stem.rsplit("_", 1)
-            if len(parts) != 2 or not parts[0]:
-                continue
-            slide_stem, channel = parts
-            ms.slides.add(slide_stem)
-            ms.channels.add(channel)
-
-            for raw_line in txt.read_text().splitlines():
-                line = raw_line.strip()
-                if not line or ":" not in line:
-                    continue
-                key, boxes_str = line.split(":", 1)
-                key = key.strip()
-                # key: {stem}_{fov_x}_{fov_y}  — strip last two int components
-                key_parts = key.rsplit("_", 2)
-                if len(key_parts) == 3:
-                    try:
-                        fov_x, fov_y = int(key_parts[1]), int(key_parts[2])
-                        ms.fovs.add((key_parts[0], fov_x, fov_y))
-                        ms.marker_count += len(boxes_str.split())
-                    except ValueError:
-                        pass
-
-    # ------------------------------------------------------------------
-    # Region Annotations/Annot/{stem}_regions.json
-    # Content: [{id, channel, points}, ...]
-    # ------------------------------------------------------------------
-    region_annot = annot_dir / "Region Annotations" / "Annot"
-    if region_annot.exists():
-        for jf in sorted(region_annot.glob("*_regions.json")):
-            slide_stem = jf.stem[: -len("_regions")]
-            if not slide_stem:
-                continue
-            rs.slides.add(slide_stem)
-            try:
-                data = json.loads(jf.read_text())
-                rs.region_count += len(data)
-            except Exception:
-                pass
-
-        # Region FOVs come from Region Annotations/FOVs/{stem}_{channel}_{x}_{y}.png
-        region_fovs_dir = annot_dir / "Region Annotations" / "FOVs"
-        if region_fovs_dir.exists():
-            for png in region_fovs_dir.glob("*.png"):
-                key_parts = png.stem.rsplit("_", 2)
-                if len(key_parts) == 3:
-                    try:
-                        fov_x, fov_y = int(key_parts[1]), int(key_parts[2])
-                        # key_parts[0] is "{stem}_{channel}" — good enough as identity key
-                        rs.fovs.add((key_parts[0], fov_x, fov_y))
-                    except ValueError:
-                        pass
-
-    return ms, rs
-
-
-# ---------------------------------------------------------------------------
-# Dialog helpers
-# ---------------------------------------------------------------------------
 
 def _make_section(title: str, rows: list[tuple[str, str, str]]) -> QGroupBox:
     box = QGroupBox(title)
@@ -156,39 +100,44 @@ class SummaryDialog(QDialog):
             "QDialogButtonBox QPushButton:hover { background: #3a3a3a; }"
         )
 
-        annot_dir = get_settings().annotations_dir
-        ms, rs = _scan_dir(annot_dir)
+        db_path = get_settings().db_path.expanduser().resolve()
+        stats = _query_db(db_path)
 
         layout = QVBoxLayout(self)
         layout.setSpacing(8)
         layout.setContentsMargins(14, 10, 14, 14)
 
-        dir_lbl = QLabel(str(annot_dir))
-        dir_lbl.setStyleSheet("color: #555; font-size: 10px;")
-        dir_lbl.setWordWrap(True)
-        layout.addWidget(dir_lbl)
+        db_lbl = QLabel(str(db_path))
+        db_lbl.setStyleSheet("color: #555; font-size: 10px;")
+        db_lbl.setWordWrap(True)
+        layout.addWidget(db_lbl)
+
+        # -- FOVs --
+        fov = stats["fov"]
+        layout.addWidget(_make_section("FOVs", [
+            ("FOVs", f"{fov['count']:,}", ""),
+            ("Slides", str(fov["slides"]), ""),
+        ]))
 
         # -- Marker Annotations --
+        mk = stats["cell_marker"]
+        names = mk["biomarker_names"]
         channels_str = ""
-        if ms.channels:
-            names = ", ".join(sorted(ms.channels))
-            channels_str = names if len(names) <= 60 else names[:57] + "…"
-
-        marker_rows: list[tuple[str, str, str]] = [
-            ("Cell marker annotations", f"{ms.marker_count:,}", ""),
-            ("FOVs", f"{len(ms.fovs):,}", ""),
-            ("Biomarkers", str(len(ms.channels)), channels_str),
-            ("Slides", str(len(ms.slides)), ""),
-        ]
-        layout.addWidget(_make_section("Marker Annotations", marker_rows))
+        if names:
+            joined = ", ".join(names)
+            channels_str = joined if len(joined) <= 60 else joined[:57] + "…"
+        layout.addWidget(_make_section("Marker Annotations", [
+            ("Cell marker annotations", f"{mk['count']:,}", ""),
+            ("Biomarkers", str(mk["biomarkers"]), channels_str),
+            ("Slides", str(mk["slides"]), ""),
+        ]))
 
         # -- Region Annotations --
-        region_rows: list[tuple[str, str, str]] = [
-            ("Region annotations", f"{rs.region_count:,}", ""),
-            ("FOVs", f"{len(rs.fovs):,}", ""),
-            ("Slides", str(len(rs.slides)), ""),
-        ]
-        layout.addWidget(_make_section("Region Annotations", region_rows))
+        rg = stats["region"]
+        layout.addWidget(_make_section("Region Annotations", [
+            ("Region annotations", f"{rg['count']:,}", ""),
+            ("Slides", str(rg["slides"]), ""),
+        ]))
 
         btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         btns.rejected.connect(self.reject)

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from __future__ import annotations
+
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QPen, QPolygonF, QPixmap
 from PySide6.QtWidgets import QGraphicsPolygonItem, QGraphicsScene
@@ -8,6 +10,7 @@ from ..annotations.models import AnnotationStore, CellMarker, FOVAnnotation, Reg
 from ..compositing.compositor import ChannelSettings
 from ..tiles.tile_cache import TileKey
 from ..tiles.tile_manager import TileManager
+from .cell_det_cross_item import CellDetCrossItem
 from .cell_marker_item import CellMarkerItem
 from .fov_item import FOVItem
 from .region_item import RegionItem
@@ -31,10 +34,13 @@ class SlideScene(QGraphicsScene):
         self._region_items: dict[str, RegionItem] = {}
         self._fov_items: dict[str, FOVItem] = {}
         self._stardist_items: list[QGraphicsPolygonItem] = []
+        self._cell_det_items: list[CellDetCrossItem] = []
         self._annotations_visible = True
         self._stardist_visible = True
         self._stardist_color = QColor(0, 230, 180)
-        self._stardist_width = 1
+        self._stardist_width = 2
+        self._cell_det_visible = True
+        self._cell_det_color = QColor(255, 100, 80)
         self._marker_show_box = False
 
         self._current_viewport: QRectF | None = None
@@ -59,6 +65,7 @@ class SlideScene(QGraphicsScene):
         self._region_items.clear()
         self._fov_items.clear()
         self._stardist_items.clear()
+        self._cell_det_items.clear()
         self._current_level = 0
         self._thumbnail_item = None
         w, h = reader.dimensions
@@ -142,6 +149,25 @@ class SlideScene(QGraphicsScene):
         pen = self._make_stardist_pen()
         for item in self._stardist_items:
             item.setPen(pen)
+        for item in self._cell_det_items:
+            item.set_screen_width(width)
+
+    def set_cell_det_points(self, points: list[tuple[float, float]]) -> None:
+        for item in self._cell_det_items:
+            self.removeItem(item)
+        self._cell_det_items.clear()
+
+        for cx, cy in points:
+            item = CellDetCrossItem(self._cell_det_color, self._stardist_width)
+            item.setPos(cx, cy)
+            item.setVisible(self._cell_det_visible)
+            self._cell_det_items.append(item)
+            self.addItem(item)
+
+    def set_cell_det_visible(self, visible: bool) -> None:
+        self._cell_det_visible = visible
+        for item in self._cell_det_items:
+            item.setVisible(visible)
 
     def _make_stardist_pen(self) -> QPen:
         pen = QPen(self._stardist_color)
