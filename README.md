@@ -25,6 +25,9 @@ A desktop annotation tool for multiplex immunofluorescence (mIF) whole-slide ima
 - **Unsaved-changes guard** — prompts to save before opening a new image or quitting.
 - **Colorful icon toolbar** — tool buttons use crisp QPainter-drawn icons (pan, marker, region, select, eye, box-marker, save, load, quit) instead of text characters, avoiding platform emoji rendering issues.
 - **StarDist nucleus segmentation** — run StarDist (ONNX) inference on all FOVs in a background thread; detected cell outlines are overlaid on the slide. Toggle outline visibility with the toolbar button; customise outline colour and line width via **StarDist → Outline Settings**.
+- **DFINE cell detection** — run a DFINE ONNX object-detection model on all FOV tiles in a background thread. The active marker channel is mapped to red, DAPI/Hoechst to blue. Detected cells appear as zoom-invariant cross markers. Use the toolbar **Convert** button to turn detections into cell marker annotations.
+- **Image list panel** — a right-hand sidebar lists every slide image found under the configured `data_dir`. Each entry shows live annotation counts (markers / regions / FOVs) drawn from the SQLite database. Double-click any entry to open that slide.
+- **SQLite annotation database** — annotations are written to a SQLite database (WAL mode) in addition to JSON sidecars, enabling fast cross-slide queries and powering the image list panel counts.
 - **Annotation summary** — **Summary** toolbar button opens a dialog showing, across all annotation files in the configured directory, the total count of cell markers, regions, and FOVs grouped by slide and channel.
 
 ## Supported file formats
@@ -103,7 +106,10 @@ annotations_dir: ~/data/annotations
 | Key | Default | Description |
 |-----|---------|-------------|
 | `annotations_dir` | `~/data/annotations` | Directory where annotation JSON files are saved and loaded from. |
-| `stardist_model` | *(none)* | Path to the StarDist ONNX model file used for nucleus segmentation (e.g. `~/data/models/stardist-versatile-fluo_dynamic.onnx`). |
+| `stardist_model` | *(none)* | Path to the StarDist ONNX model file used for nucleus segmentation. |
+| `cell_det_model` | *(none)* | Path to the DFINE ONNX model file used for cell detection. |
+| `db_path` | `~/data/annotations/annotations.db` | Path to the SQLite annotation database. |
+| `data_dir` | *(none)* | Root directory scanned recursively for slide images shown in the image list panel. |
 
 ## FOV image export
 
@@ -140,11 +146,14 @@ slideannotator/
 │   ├── stardist.py         # StarDistONNX — ONNX model wrapper
 │   ├── stardist_worker.py  # QRunnable background inference worker
 │   ├── stardist_utils.py   # Pre/post-processing helpers
+│   ├── CellONNXInference.py  # DFINE / RT-DETR ONNX cell detection models
+│   ├── cell_det_worker.py  # QRunnable background cell detection worker
 │   └── nms.py              # Non-maximum suppression
 ├── ui/
 │   ├── main_window.py      # Main window, menus, file I/O
 │   ├── annotation_toolbar.py  # Icon toolbar (QPainter-drawn icons)
 │   ├── channel_panel.py    # Per-channel controls
+│   ├── image_list_panel.py # Right sidebar: image list with annotation counts
 │   ├── summary_dialog.py   # Annotation summary dialog
 │   └── stardist_settings_dialog.py  # StarDist outline colour/width settings
 ├── readers/
@@ -162,6 +171,7 @@ slideannotator/
 │   ├── slide_scene.py      # QGraphicsScene with tile and annotation items
 │   ├── slide_view.py       # QGraphicsView with zoom/pan/key handling
 │   ├── cell_marker_item.py
+│   ├── cell_det_cross_item.py  # Zoom-invariant cross marker for cell detections
 │   ├── fov_item.py         # FOV rectangle item
 │   ├── region_item.py
 │   └── tile_item.py
@@ -169,7 +179,8 @@ slideannotator/
 │   └── compositor.py       # Per-channel colour + intensity compositing
 ├── annotations/
 │   ├── models.py           # CellMarker, RegionAnnotation, FOVAnnotation, AnnotationStore
-│   └── serializer.py       # JSON load/save + txt export
+│   ├── serializer.py       # JSON load/save + txt export
+│   └── database.py         # SQLite-backed annotation store (AnnotationDB)
 ├── tools/
 │   ├── base_tool.py
 │   ├── shift_select_mixin.py  # Shared Shift+select/move/rubber-band/delete behaviour
