@@ -2,9 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import numpy as np
 from PySide6.QtCore import Qt, QThreadPool, QTimer
-from PySide6.QtGui import QImage
 from PySide6.QtWidgets import (
     QFileDialog,
     QMainWindow,
@@ -41,6 +39,7 @@ from ..viewsettings import load_view_settings, save_view_settings
 from .annotation_toolbar import AnnotationToolbar
 from .channel_panel import ChannelPanel
 from .image_list_panel import ImageListPanel
+from .marker_selection_dialog import MarkerSelectionDialog
 from .stardist_settings_dialog import StarDistSettingsDialog
 from .summary_dialog import SummaryDialog
 
@@ -115,6 +114,7 @@ class MainWindow(QMainWindow):
         self._view.space_pressed.connect(self._toggle_annotations)
         self._view.b_pressed.connect(self._toggle_marker_boxes)
         self._view.fov_requested.connect(self._on_fov_requested)
+        self._view.marker_requested.connect(self._on_marker_requested)
 
         self._channel_panel = ChannelPanel()
         self._channel_panel.setMinimumWidth(200)
@@ -176,10 +176,6 @@ class MainWindow(QMainWindow):
         self._export_region_action.setShortcut("Ctrl+Shift+E")
         self._export_region_action.triggered.connect(self._export_region_annot)
 
-        self._save_fov_action = file_menu.addAction("Save &FOV Images…")
-        self._save_fov_action.triggered.connect(self._save_fov_images)
-        self._save_fov_action.setEnabled(False)
-
         file_menu.addSeparator()
         quit_action = file_menu.addAction("&Quit")
         quit_action.setShortcut("Ctrl+Q")
@@ -228,6 +224,8 @@ class MainWindow(QMainWindow):
             self._store.annotation_added.connect(self._update_undo_redo_state)
             self._store.annotation_removed.connect(self._update_undo_redo_state)
             self._store.annotation_moved.connect(self._update_undo_redo_state)
+            self._store.annotation_added.connect(self._refresh_fov_counts)
+            self._store.annotation_removed.connect(self._refresh_fov_counts)
 
             # Tile caches + manager
             raw_cache = LRUCache(max_size=500)
@@ -271,6 +269,11 @@ class MainWindow(QMainWindow):
             self._on_tool_changed("pan")
             self._toolbar._pan_btn.setChecked(True)
 
+            # Auto-load saved annotations for this slide (silent — no dialog)
+            self._get_db().load_for_slide(self._slide_path.stem, self._store)
+            scene.set_active_channel(self._active_channel)
+            scene.sync_from_store()
+
             # Reset inference toggle/convert button states for new image
             self._toolbar._stardist_toggle_btn.setChecked(True)
             self._toolbar._cell_det_toggle_btn.setChecked(True)
@@ -279,7 +282,6 @@ class MainWindow(QMainWindow):
 
             self._save_action.setEnabled(True)
             self._load_action.setEnabled(True)
-            self._save_fov_action.setEnabled(True)
             self._toolbar.set_save_load_enabled(True)
             self.setWindowTitle(f"SlideAnnotator — {path.name}")
 
@@ -303,10 +305,24 @@ class MainWindow(QMainWindow):
         self._redo_action.setEnabled(can_redo)
         self._toolbar.set_undo_redo_enabled(can_undo, can_redo)
 
+    def _refresh_fov_counts(self, *_) -> None:
+        if self._store is None:
+            return
+        counts: dict[str, int] = {}
+        for fov in self._store.fovs.values():
+            counts[fov.channel] = counts.get(fov.channel, 0) + 1
+        self._channel_panel.update_fov_counts(counts)
+
     def _export_cell_marker_annot(self) -> None:
+        db = self._get_db()
+        channels = db.get_distinct_channels("cell_marker")
+        dlg = MarkerSelectionDialog(channels, title="Select Markers to Export", parent=self)
+        if dlg.exec() != MarkerSelectionDialog.DialogCode.Accepted:
+            return
+        selected = set(dlg.selected_channels())
+
         output_dir = get_settings().annotations_dir
         output_dir.mkdir(parents=True, exist_ok=True)
-        db = self._get_db()
         current_stem = self._slide_path.stem if self._slide_path else None
         saved = errors = 0
         for slide_name, slide_path in db.get_slide_paths().items():
@@ -324,7 +340,10 @@ class MainWindow(QMainWindow):
                     except Exception:
                         pass
             try:
-                s, e = export_cell_marker_annot(output_dir, slide_name, temp_store, reader)
+                s, e = export_cell_marker_annot(
+                    output_dir, slide_name, temp_store, reader,
+                    selected_channels=selected,
+                )
             finally:
                 if opened and reader is not None:
                     reader.close()
@@ -383,9 +402,15 @@ class MainWindow(QMainWindow):
             )
 
     def _export_region_annot(self) -> None:
+        db = self._get_db()
+        channels = db.get_distinct_channels("region")
+        dlg = MarkerSelectionDialog(channels, title="Select Markers to Export", parent=self)
+        if dlg.exec() != MarkerSelectionDialog.DialogCode.Accepted:
+            return
+        selected = set(dlg.selected_channels())
+
         output_dir = get_settings().annotations_dir
         output_dir.mkdir(parents=True, exist_ok=True)
-        db = self._get_db()
         current_stem = self._slide_path.stem if self._slide_path else None
         saved = errors = 0
         for slide_name, slide_path in db.get_slide_paths().items():
@@ -403,7 +428,10 @@ class MainWindow(QMainWindow):
                     except Exception:
                         pass
             try:
-                s, e = export_region_annot(output_dir, slide_name, temp_store, reader)
+                s, e = export_region_annot(
+                    output_dir, slide_name, temp_store, reader,
+                    selected_channels=selected,
+                )
             finally:
                 if opened and reader is not None:
                     reader.close()
@@ -421,7 +449,12 @@ class MainWindow(QMainWindow):
     def _on_fov_requested(self, scene_pos) -> None:
         if self._store is None:
             return
-        self._store.add_fov(scene_pos.x(), scene_pos.y())
+        self._store.add_fov(scene_pos.x(), scene_pos.y(), channel=self._active_channel)
+
+    def _on_marker_requested(self, scene_pos) -> None:
+        if self._store is None:
+            return
+        self._store.add_marker(scene_pos.x(), scene_pos.y(), self._active_channel)
 
     # ------------------------------------------------------------------
     def _on_tool_changed(self, name: str) -> None:
@@ -460,6 +493,9 @@ class MainWindow(QMainWindow):
         for tool in self._tools.values():
             tool.active_channel = name
         self._toolbar.set_active_channel(name)
+        scene = self._view.scene()
+        if isinstance(scene, SlideScene):
+            scene.set_active_channel(name)
 
     def _invalidate_tiles(self) -> None:
         if self._tile_manager:
@@ -485,85 +521,16 @@ class MainWindow(QMainWindow):
     def _toggle_marker_boxes(self) -> None:
         self._toolbar._box_btn.setChecked(not self._toolbar._box_btn.isChecked())
 
-    def _save_fov_images(self) -> None:
-        if self._store is None or self._slide_path is None or self._reader is None:
-            return
-
-        fovs = list(self._store.fovs.values())
-        if not fovs:
-            QMessageBox.information(self, "No FOVs", "No FOV annotations to export.")
-            return
-
-        images_dir = self._slide_path.parent / "images"
-        images_dir.mkdir(exist_ok=True)
-
-        visible: list[tuple] = [
-            (i, ch, self._channel_settings[i])
-            for i, ch in enumerate(self._reader.channels)
-            if i < len(self._channel_settings) and self._channel_settings[i].visible
-        ]
-        if not visible:
-            QMessageBox.information(self, "No Visible Channels", "No channels are visible.")
-            return
-
-        def _is_blue(name: str) -> bool:
-            n = name.lower()
-            return "dapi" in n or "hoechst" in n
-
-        ch_r = ch_g = ch_b = ch_gray = None
-        if len(visible) == 1:
-            ch_gray = visible[0]
-        else:
-            blue_list = [t for t in visible if _is_blue(t[1].name)]
-            ch_b = blue_list[0] if blue_list else visible[-1]
-            rest = [t for t in visible if t is not ch_b]
-            ch_r = rest[0] if rest else None
-            ch_g = rest[1] if len(rest) > 1 else None
-
-        def _to_u8(arr: np.ndarray, s) -> np.ndarray:
-            a = arr.astype(np.float32)
-            span = max(float(s.max_val) - float(s.min_val), 1.0)
-            return (np.clip((a - float(s.min_val)) / span, 0.0, 1.0) * 255.0).astype(np.uint8)
-
-        stem = self._slide_path.stem
-        saved = errors = 0
-
-        for fov in fovs:
-            x, y = int(fov.x), int(fov.y)
-            w, h = int(fov.w), int(fov.h)
-            out_path = images_dir / f"{stem}_{x}_{y}_{w}.png"
-            try:
-                raw = self._reader.read_region(0, x, y, w, h)
-                if ch_gray is not None:
-                    idx, _, s = ch_gray
-                    data = np.ascontiguousarray(_to_u8(raw[idx], s))
-                    qimg = QImage(data.data, w, h, w, QImage.Format.Format_Grayscale8)
-                else:
-                    rgb = np.zeros((h, w, 3), dtype=np.uint8)
-                    if ch_r is not None:
-                        rgb[:, :, 0] = _to_u8(raw[ch_r[0]], ch_r[2])
-                    if ch_g is not None:
-                        rgb[:, :, 1] = _to_u8(raw[ch_g[0]], ch_g[2])
-                    if ch_b is not None:
-                        rgb[:, :, 2] = _to_u8(raw[ch_b[0]], ch_b[2])
-                    data = np.ascontiguousarray(rgb)
-                    qimg = QImage(data.data, w, h, w * 3, QImage.Format.Format_RGB888)
-                qimg.copy().save(str(out_path), "PNG")
-                saved += 1
-            except Exception:
-                errors += 1
-
-        msg = f"Saved {saved} FOV image(s) to:\n{images_dir}"
-        if errors:
-            msg += f"\n({errors} error(s))"
-        QMessageBox.information(self, "FOV Images Saved", msg)
-
     # ------------------------------------------------------------------
     def _run_stardist(self) -> None:
         if self._store is None or self._reader is None:
             return
 
-        fovs = list(self._store.fovs.values())
+        selected_fov_ids = {aid for aid in self._store.selected if aid in self._store.fovs}
+        if selected_fov_ids:
+            fovs = [self._store.fovs[aid] for aid in selected_fov_ids]
+        else:
+            fovs = [f for f in self._store.fovs.values() if f.channel == self._active_channel]
         if not fovs:
             QMessageBox.information(self, "No FOVs", "Add FOV annotations first (F key).")
             return
@@ -608,7 +575,7 @@ class MainWindow(QMainWindow):
         if isinstance(scene, SlideScene):
             scene.set_stardist_polygons(polygons)
         n = len(polygons)
-        QMessageBox.information(self, "StarDist Complete", f"Detected {n} cell(s) across all FOVs.")
+        QMessageBox.information(self, "StarDist Complete", f"Detected {n} nucleus/nuclei.")
 
     def _on_stardist_error(self, msg: str) -> None:
         self._toolbar.set_stardist_running(False)
@@ -639,7 +606,11 @@ class MainWindow(QMainWindow):
         if self._store is None or self._reader is None:
             return
 
-        fovs = list(self._store.fovs.values())
+        selected_fov_ids = {aid for aid in self._store.selected if aid in self._store.fovs}
+        if selected_fov_ids:
+            fovs = [self._store.fovs[aid] for aid in selected_fov_ids]
+        else:
+            fovs = [f for f in self._store.fovs.values() if f.channel == self._active_channel]
         if not fovs:
             QMessageBox.information(self, "No FOVs", "Add FOV annotations first (F key).")
             return
@@ -705,7 +676,7 @@ class MainWindow(QMainWindow):
         if isinstance(scene, SlideScene):
             scene.set_cell_det_points(centers)
         self._toolbar.set_cell_det_convert_enabled(bool(boxes))
-        QMessageBox.information(self, "Detection Complete", f"Detected {len(boxes)} cell(s) across all FOVs.")
+        QMessageBox.information(self, "Detection Complete", f"Detected {len(boxes)} cell(s).")
 
     def _on_cell_det_error(self, msg: str) -> None:
         self._toolbar.set_cell_det_running(False)

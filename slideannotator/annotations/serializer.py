@@ -33,6 +33,8 @@ def needs_region_fovs(output_dir: Path, slide_name: str, store: AnnotationStore)
     channels = {r.channel for r in store.regions.values() if r.points}
     for channel in channels:
         for fov in store.fovs.values():
+            if fov.channel != channel:
+                continue
             path = fovs_dir / f"{slide_name}_{channel}_{int(round(fov.x))}_{int(round(fov.y))}.png"
             if not path.exists():
                 return True
@@ -77,11 +79,13 @@ def export_cell_marker_annot(
     slide_name: str,
     store: AnnotationStore,
     reader: Any | None = None,
+    selected_channels: set[str] | None = None,
 ) -> tuple[int, int]:
     """Export cell marker annotations to 'Cell Marker Annotations' directory.
 
     Writes per-channel txt files to Annot/ and, when reader is provided, FOV
     images to FOVs/.  Returns (saved_count, error_count).
+    When *selected_channels* is provided only those channels are exported.
     """
     stem = slide_name
     annot_dir = output_dir / "Cell Marker Annotations" / "Annot"
@@ -94,6 +98,8 @@ def export_cell_marker_annot(
     saved = errors = 0
 
     marker_channels = {m.channel for m in store.markers.values()}
+    if selected_channels is not None:
+        marker_channels = marker_channels & selected_channels
     for channel in sorted(marker_channels):
         ch_idx = ch_index.get(channel)
         lines: list[str] = []
@@ -106,10 +112,10 @@ def export_cell_marker_annot(
                 if m.channel != channel:
                     continue
                 if fx1 <= m.x <= fx2 and fy1 <= m.y <= fy2:
-                    bx1 = int(round(m.x - MARKER_BOX_HALF))
-                    by1 = int(round(m.y - MARKER_BOX_HALF))
-                    bx2 = int(round(m.x + MARKER_BOX_HALF))
-                    by2 = int(round(m.y + MARKER_BOX_HALF))
+                    bx1 = int(round(m.x - MARKER_BOX_HALF - fx1))
+                    by1 = int(round(m.y - MARKER_BOX_HALF - fy1))
+                    bx2 = int(round(m.x + MARKER_BOX_HALF - fx1))
+                    by2 = int(round(m.y + MARKER_BOX_HALF - fy1))
                     boxes.append(f"{bx1},{by1},{bx2},{by2}")
             if boxes:
                 key = f"{stem}_{int(round(fov.x))}_{int(round(fov.y))}"
@@ -137,11 +143,13 @@ def export_region_annot(
     slide_name: str,
     store: AnnotationStore,
     reader: Any | None = None,
+    selected_channels: set[str] | None = None,
 ) -> tuple[int, int]:
     """Export region annotations to 'Region Annotations' directory.
 
     Writes binary masks to Annot/ and, when reader is provided, FOV images to
     FOVs/.  Returns (saved_count, error_count).
+    When *selected_channels* is provided only those channels are exported.
     """
     from PySide6.QtCore import QPointF, Qt
     from PySide6.QtGui import QBrush, QImage, QPainter, QPolygonF
@@ -159,12 +167,15 @@ def export_region_annot(
     regions_by_channel: dict[str, list] = {}
     for region in store.regions.values():
         if region.points:
-            regions_by_channel.setdefault(region.channel, []).append(region)
+            if selected_channels is None or region.channel in selected_channels:
+                regions_by_channel.setdefault(region.channel, []).append(region)
 
     for channel, channel_regions in sorted(regions_by_channel.items()):
         ch_idx = ch_index.get(channel)
 
         for fov in store.fovs.values():
+            if fov.channel != channel:
+                continue
             fx, fy = fov.x, fov.y
             fw, fh = int(fov.w), int(fov.h)
             x_key = int(round(fx))
@@ -177,6 +188,18 @@ def export_region_annot(
                     saved += ok
                     errors += not ok
 
+            overlapping = [
+                r for r in channel_regions
+                if r.points and not (
+                    max(p[0] for p in r.points) < fx
+                    or min(p[0] for p in r.points) > fx + fw
+                    or max(p[1] for p in r.points) < fy
+                    or min(p[1] for p in r.points) > fy + fh
+                )
+            ]
+            if not overlapping:
+                continue
+
             mask_path = annot_dir / f"{stem}_{channel}_{x_key}_{y_key}.png"
             try:
                 mask_img = QImage(fw, fh, QImage.Format.Format_Grayscale8)
@@ -184,13 +207,8 @@ def export_region_annot(
                 painter = QPainter(mask_img)
                 painter.setBrush(QBrush(Qt.GlobalColor.white))
                 painter.setPen(Qt.PenStyle.NoPen)
-                for region in channel_regions:
-                    pts = region.points
-                    xs = [p[0] for p in pts]
-                    ys = [p[1] for p in pts]
-                    if max(xs) < fx or min(xs) > fx + fw or max(ys) < fy or min(ys) > fy + fh:
-                        continue
-                    poly = QPolygonF([QPointF(p[0] - fx, p[1] - fy) for p in pts])
+                for region in overlapping:
+                    poly = QPolygonF([QPointF(p[0] - fx, p[1] - fy) for p in region.points])
                     painter.drawPolygon(poly)
                 painter.end()
                 mask_img.copy().save(str(mask_path), "PNG")
@@ -272,7 +290,7 @@ def load_structured(
                     if len(parts) != 4:
                         continue
                     bx1, by1, bx2, by2 = map(int, parts)
-                    store.add_marker((bx1 + bx2) / 2.0, (by1 + by2) / 2.0, channel)
+                    store.add_marker(fov_x + (bx1 + bx2) / 2.0, fov_y + (by1 + by2) / 2.0, channel)
                     marker_count += 1
 
     region_count = 0

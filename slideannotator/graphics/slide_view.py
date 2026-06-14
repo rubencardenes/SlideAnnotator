@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QPointF, Qt, Signal
-from PySide6.QtWidgets import QGraphicsView
+from PySide6.QtWidgets import QGraphicsView, QLabel
 
 from .slide_scene import SlideScene
 
@@ -11,7 +11,8 @@ class SlideView(QGraphicsView):
     MIN_ZOOM = 0.002
     MAX_ZOOM = 40.0
 
-    fov_requested = Signal(object)   # QPointF scene position
+    fov_requested = Signal(object)        # QPointF scene position
+    marker_requested = Signal(object)    # QPointF scene position
     space_pressed = Signal()
     b_pressed = Signal()
 
@@ -37,6 +38,15 @@ class SlideView(QGraphicsView):
         self._pan_hbar = 0
         self._pan_vbar = 0
         self._last_scene_pos = QPointF(0, 0)
+
+        self._coords_visible = False
+        self._coords_label = QLabel("", self)
+        self._coords_label.setStyleSheet(
+            "color: #ddd; background: rgba(0,0,0,160); padding: 2px 6px;"
+            "border-radius: 3px; font-size: 11px;"
+        )
+        self._coords_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self._coords_label.hide()
 
     # ------------------------------------------------------------------
     def set_tool(self, tool) -> None:
@@ -90,6 +100,9 @@ class SlideView(QGraphicsView):
     def mouseMoveEvent(self, event) -> None:
         self._last_scene_pos = self.mapToScene(event.position().toPoint())
 
+        if self._coords_visible:
+            self._update_coords_label()
+
         if self._panning:
             delta = event.position().toPoint() - self._pan_start
             self.horizontalScrollBar().setValue(self._pan_hbar - delta.x())
@@ -134,9 +147,38 @@ class SlideView(QGraphicsView):
             self.b_pressed.emit()
             event.accept()
             return
+        if event.key() == Qt.Key.Key_A:
+            self.marker_requested.emit(QPointF(self._last_scene_pos))
+            event.accept()
+            return
+        if event.key() == Qt.Key.Key_C:
+            self._coords_visible = not self._coords_visible
+            if self._coords_visible:
+                self._update_coords_label()
+                self._coords_label.show()
+            else:
+                self._coords_label.hide()
+            event.accept()
+            return
         if self._tool:
             self._tool.key_press(event)
         super().keyPressEvent(event)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._reposition_coords_label()
+
+    def _update_coords_label(self) -> None:
+        x, y = int(self._last_scene_pos.x()), int(self._last_scene_pos.y())
+        self._coords_label.setText(f"x={x}  y={y}")
+        self._coords_label.adjustSize()
+        self._reposition_coords_label()
+
+    def _reposition_coords_label(self) -> None:
+        vp = self.viewport()
+        lbl = self._coords_label
+        margin = 6
+        lbl.move(vp.width() - lbl.width() - margin, vp.height() - lbl.height() - margin)
 
     def scrollContentsBy(self, dx: int, dy: int) -> None:
         super().scrollContentsBy(dx, dy)

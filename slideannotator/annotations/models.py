@@ -71,6 +71,7 @@ class FOVAnnotation:
     y: float  # top-left y
     w: float = 512.0
     h: float = 512.0
+    channel: str = ""
     color: tuple[int, int, int] = field(default_factory=lambda: (255, 255, 255))
     created_at: str = field(default_factory=_now_iso)
     modified_at: str = field(default_factory=_now_iso)
@@ -79,8 +80,8 @@ class FOVAnnotation:
     type: str = "fov"
 
     @staticmethod
-    def create(x: float, y: float, w: float = 512.0, h: float = 512.0) -> FOVAnnotation:
-        return FOVAnnotation(id=str(uuid.uuid4()), x=x, y=y, w=w, h=h)
+    def create(x: float, y: float, w: float = 512.0, h: float = 512.0, channel: str = "") -> FOVAnnotation:
+        return FOVAnnotation(id=str(uuid.uuid4()), x=x, y=y, w=w, h=h, channel=channel)
 
 
 def _snapshot_ann(ann: CellMarker | RegionAnnotation | FOVAnnotation):
@@ -131,10 +132,10 @@ class AnnotationStore(QObject):
         return r
 
     def add_fov(
-        self, cx: float, cy: float, w: float = 512.0, h: float = 512.0
+        self, cx: float, cy: float, w: float = 512.0, h: float = 512.0, channel: str = ""
     ) -> FOVAnnotation:
         # cx, cy is the center; stored x,y is top-left
-        f = FOVAnnotation.create(cx - w / 2, cy - h / 2, w, h)
+        f = FOVAnnotation.create(cx - w / 2, cy - h / 2, w, h, channel=channel)
         self._fovs[f.id] = f
         self.is_dirty = True
         self.annotation_added.emit(f.id)

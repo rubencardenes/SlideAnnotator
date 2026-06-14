@@ -93,10 +93,18 @@ class ChannelRow(QFrame):
         name_lbl = QLabel(self._info.name)
         name_lbl.setStyleSheet("color: #ddd; font-size: 12px;")
 
+        self._fov_count_lbl = QLabel("0")
+        self._fov_count_lbl.setStyleSheet(
+            "color: #555; font-size: 10px; background: #333; "
+            "border-radius: 8px; padding: 1px 5px;"
+        )
+        self._fov_count_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
         top.addWidget(self._check)
         top.addWidget(self._color_btn)
         top.addWidget(name_lbl)
         top.addStretch()
+        top.addWidget(self._fov_count_lbl)
         layout.addLayout(top)
 
         slider_style = (
@@ -160,6 +168,14 @@ class ChannelRow(QFrame):
     def mousePressEvent(self, event) -> None:
         self.selected.emit()
         super().mousePressEvent(event)
+
+    def update_fov_count(self, count: int) -> None:
+        self._fov_count_lbl.setText(str(count))
+        color = "#7af" if count > 0 else "#555"
+        self._fov_count_lbl.setStyleSheet(
+            f"color: {color}; font-size: 10px; background: #333; "
+            "border-radius: 8px; padding: 1px 5px;"
+        )
 
     def set_active(self, active: bool) -> None:
         if active:
@@ -259,6 +275,10 @@ class ChannelPanel(QWidget):
 
         if self._rows:
             self._on_row_selected(0)
+
+    def update_fov_counts(self, counts: dict[str, int]) -> None:
+        for row in self._rows:
+            row.update_fov_count(counts.get(row._info.name, 0))
 
     def _on_row_selected(self, index: int) -> None:
         for i, row in enumerate(self._rows):

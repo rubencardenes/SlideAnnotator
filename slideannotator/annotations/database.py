@@ -125,7 +125,8 @@ class AnnotationDB:
                 )
             elif ann_type == "fov":
                 ann = FOVAnnotation(
-                    id=ann_id, x=x, y=y, w=w or 512.0, h=h or 512.0, **meta,
+                    id=ann_id, x=x, y=y, w=w or 512.0, h=h or 512.0,
+                    channel=biomarker, **meta,
                 )
             elif ann_type == "region":
                 pts = self._conn.execute(
@@ -163,6 +164,15 @@ class AnnotationDB:
             "ORDER BY a.slide_name"
         ).fetchall()
         return {row[0]: Path(row[1]) if row[1] else None for row in rows}
+
+    def get_distinct_channels(self, ann_type: str) -> list[str]:
+        """Return sorted distinct non-empty biomarker values for the given annotation type."""
+        rows = self._conn.execute(
+            "SELECT DISTINCT biomarker FROM annotations "
+            "WHERE type = ? AND biomarker != '' ORDER BY biomarker",
+            (ann_type,),
+        ).fetchall()
+        return [r[0] for r in rows]
 
     def get_annotation_counts_by_slide(self) -> dict[str, dict[str, int]]:
         """Return {slide_name: {'cell_marker': N, 'region': M, 'fov': K}} for all slides."""

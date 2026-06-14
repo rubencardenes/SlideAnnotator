@@ -41,6 +41,8 @@ class SlideScene(QGraphicsScene):
         self._cell_det_color = QColor(255, 100, 80)
         self._marker_show_box = False
 
+        self._active_channel: str = ""
+
         self._current_viewport: QRectF | None = None
         self._current_zoom: float = 1.0
         self._current_level: int = 0
@@ -109,14 +111,34 @@ class SlideScene(QGraphicsScene):
         for item in self._marker_items.values():
             item.set_show_box(show)
 
+    def _channel_visible(self, channel: str) -> bool:
+        return self._annotations_visible and (
+            not self._active_channel or channel == self._active_channel
+        )
+
+    def set_active_channel(self, channel: str) -> None:
+        self._active_channel = channel
+        for ann_id, item in self._marker_items.items():
+            ann = self._store.get_marker(ann_id)
+            item.setVisible(self._channel_visible(ann.channel if ann else ""))
+        for ann_id, item in self._region_items.items():
+            ann = self._store.get_region(ann_id)
+            item.setVisible(self._channel_visible(ann.channel if ann else ""))
+        for ann_id, item in self._fov_items.items():
+            ann = self._store.get_fov(ann_id)
+            item.setVisible(self._channel_visible(ann.channel if ann else ""))
+
     def set_annotations_visible(self, visible: bool) -> None:
         self._annotations_visible = visible
-        for item in self._marker_items.values():
-            item.setVisible(visible)
-        for item in self._region_items.values():
-            item.setVisible(visible)
-        for item in self._fov_items.values():
-            item.setVisible(visible)
+        for ann_id, item in self._marker_items.items():
+            ann = self._store.get_marker(ann_id)
+            item.setVisible(self._channel_visible(ann.channel if ann else ""))
+        for ann_id, item in self._region_items.items():
+            ann = self._store.get_region(ann_id)
+            item.setVisible(self._channel_visible(ann.channel if ann else ""))
+        for ann_id, item in self._fov_items.items():
+            ann = self._store.get_fov(ann_id)
+            item.setVisible(self._channel_visible(ann.channel if ann else ""))
 
     def set_stardist_polygons(self, polygons: list[list[tuple[float, float]]]) -> None:
         for item in self._stardist_items:
@@ -206,7 +228,7 @@ class SlideScene(QGraphicsScene):
         item = CellMarkerItem(ann.id, color)
         item.setPos(ann.x, ann.y)
         item.set_show_box(self._marker_show_box)
-        item.setVisible(self._annotations_visible)
+        item.setVisible(self._channel_visible(ann.channel))
         self._marker_items[ann.id] = item
         self.addItem(item)
 
@@ -217,13 +239,14 @@ class SlideScene(QGraphicsScene):
         for x, y in ann.points:
             polygon.append(QPointF(x, y))
         item.setPolygon(polygon)
-        item.setVisible(self._annotations_visible)
+        item.setVisible(self._channel_visible(ann.channel))
         self._region_items[ann.id] = item
         self.addItem(item)
 
     def _add_fov_item(self, ann: FOVAnnotation) -> None:
-        item = FOVItem(ann.id, ann.x, ann.y, ann.w, ann.h)
-        item.setVisible(self._annotations_visible)
+        color = self._channel_color(ann.channel)
+        item = FOVItem(ann.id, ann.x, ann.y, ann.w, ann.h, color, label=ann.channel)
+        item.setVisible(self._channel_visible(ann.channel))
         self._fov_items[ann.id] = item
         self.addItem(item)
 
