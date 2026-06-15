@@ -126,10 +126,16 @@ class AnnotationStore(QObject):
         return r
 
     def add_fov(
-        self, cx: float, cy: float, w: float | None = None, h: float | None = None, channel: str = ""
+        self,
+        cx: float,
+        cy: float,
+        w: float | None = None,
+        h: float | None = None,
+        channel: str = "",
     ) -> FOVAnnotation:
         if w is None or h is None:
             from ..settings import get_settings
+
             fw, fh = get_settings().fov_size
             w = float(fw) if w is None else w
             h = float(fh) if h is None else h

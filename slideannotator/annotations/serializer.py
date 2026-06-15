@@ -264,6 +264,7 @@ def load_structured(output_dir: Path, slide_path: Path, store: AnnotationStore) 
     marker_count = 0
 
     from ..settings import get_settings
+
     fov_w, fov_h = get_settings().fov_size
     fov_half_w, fov_half_h = fov_w / 2.0, fov_h / 2.0
 

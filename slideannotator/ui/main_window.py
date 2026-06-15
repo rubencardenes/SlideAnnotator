@@ -41,8 +41,8 @@ from .channel_panel import ChannelPanel
 from .image_list_panel import ImageListPanel
 from .image_properties_dialog import ImagePropertiesDialog
 from .marker_selection_dialog import MarkerSelectionDialog
-from .stardist_settings_dialog import StarDistSettingsDialog
 from .review_window import ReviewWindow
+from .stardist_settings_dialog import StarDistSettingsDialog
 from .summary_dialog import SummaryDialog
 
 

@@ -8,7 +8,7 @@ cell_det_model: ~/data/models/dfine_non_nuclear_ep99_v37.onnx
 fov_size: [512, 512]
 
 # Nucleus outline (StarDist) appearance
-outline_thickness: 2
+outline_thickness: 3
 outline_color: [0, 255, 0]
 
 # Region fill opacity (0–100 percent)

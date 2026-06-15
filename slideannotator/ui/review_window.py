@@ -26,7 +26,6 @@ from PySide6.QtWidgets import (
     QRadioButton,
     QScrollArea,
     QSlider,
-    QSplitter,
     QVBoxLayout,
     QWidget,
 )
@@ -256,7 +255,9 @@ class _ChannelSliders(QGroupBox):
             vals.extend([lo.value(), hi.value()])
         return tuple(vals)  # type: ignore[return-value]
 
-    def set_values(self, r_min: int, r_max: int, g_min: int, g_max: int, b_min: int, b_max: int) -> None:
+    def set_values(
+        self, r_min: int, r_max: int, g_min: int, g_max: int, b_min: int, b_max: int
+    ) -> None:
         vals = [r_min, r_max, g_min, g_max, b_min, b_max]
         for i, (lo, hi) in enumerate(self._sliders):
             lo.blockSignals(True)
@@ -498,9 +499,7 @@ class ReviewWindow(QDialog):
 
         # Count annotations for top label
         ann_count = self._count_annotations(entry)
-        self._top_label.setText(
-            f"{entry.fov_path.stem}   |   {ann_count} annotation(s)"
-        )
+        self._top_label.setText(f"{entry.fov_path.stem}   |   {ann_count} annotation(s)")
 
         # Scale and display
         self._display_pixmap(self._raw_label, raw_pix)
