@@ -1,6 +1,6 @@
 [project]
 name = "slideannotator"
-version = "0.1.0"
+version = "1.0.0"
 description = "Histological slide annotation tool for mIF images"
 readme = "README.md"
 requires-python = ">=3.10"
