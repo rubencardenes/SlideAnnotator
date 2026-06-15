@@ -3,3 +3,16 @@ stardist_model: ~/data/models/stardist-versatile-fluo_dynamic.onnx
 db_path: ~/data/annotations/annotations.db
 data_dir: ~/data/
 cell_det_model: ~/data/models/dfine_non_nuclear_ep99_v37.onnx
+
+# Field-of-view annotation size in pixels [width, height]
+fov_size: [512, 512]
+
+# Nucleus outline (StarDist) appearance
+outline_thickness: 2
+outline_color: [0, 255, 0]
+
+# Region fill opacity (0–100 percent)
+region_opacity: 50
+
+# Cell detection cross color
+detections_color: [255, 0, 0]

@@ -22,6 +22,11 @@ class Settings:
     cell_det_model: Path | None = field(default=None)
     db_path: Path = field(default_factory=lambda: Path("annotations.db"))
     data_dir: Path | None = field(default=None)
+    fov_size: tuple[int, int] = (512, 512)
+    outline_thickness: int = 2
+    outline_color: tuple[int, int, int] = (0, 255, 0)
+    region_opacity: int = 50  # 0–100 percent
+    detections_color: tuple[int, int, int] = (255, 0, 0)
 
     @staticmethod
     def from_dict(data: dict) -> Settings:
@@ -36,6 +41,19 @@ class Settings:
             s.db_path = Path(data["db_path"]).expanduser()
         if "data_dir" in data:
             s.data_dir = Path(data["data_dir"]).expanduser()
+        if "fov_size" in data:
+            v = data["fov_size"]
+            s.fov_size = (int(v[0]), int(v[1]))
+        if "outline_thickness" in data:
+            s.outline_thickness = int(data["outline_thickness"])
+        if "outline_color" in data:
+            v = data["outline_color"]
+            s.outline_color = (int(v[0]), int(v[1]), int(v[2]))
+        if "region_opacity" in data:
+            s.region_opacity = max(0, min(100, int(data["region_opacity"])))
+        if "detections_color" in data:
+            v = data["detections_color"]
+            s.detections_color = (int(v[0]), int(v[1]), int(v[2]))
         return s
 
 
