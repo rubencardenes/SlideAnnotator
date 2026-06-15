@@ -42,6 +42,7 @@ from .image_list_panel import ImageListPanel
 from .image_properties_dialog import ImagePropertiesDialog
 from .marker_selection_dialog import MarkerSelectionDialog
 from .stardist_settings_dialog import StarDistSettingsDialog
+from .review_window import ReviewWindow
 from .summary_dialog import SummaryDialog
 
 
@@ -180,6 +181,10 @@ class MainWindow(QMainWindow):
         self._export_region_action = file_menu.addAction("Export &Region Annot…")
         self._export_region_action.setShortcut("Ctrl+Shift+E")
         self._export_region_action.triggered.connect(self._export_region_annot)
+
+        self._review_action = file_menu.addAction("Re&view Annotations…")
+        self._review_action.setShortcut("Ctrl+R")
+        self._review_action.triggered.connect(self._show_review_window)
 
         file_menu.addSeparator()
         quit_action = file_menu.addAction("&Quit")
@@ -453,6 +458,10 @@ class MainWindow(QMainWindow):
 
     def _show_summary(self) -> None:
         dlg = SummaryDialog(parent=self)
+        dlg.exec()
+
+    def _show_review_window(self) -> None:
+        dlg = ReviewWindow(parent=self)
         dlg.exec()
 
     def _on_fov_requested(self, scene_pos) -> None:
