@@ -74,8 +74,22 @@ class AnnotationDB:
             if isinstance(ann, RegionAnnotation):
                 cur.execute(
                     _INSERT,
-                    (ann.id, "region", ann.created_at, now, ann.created_by,
-                     slide_name, r, g, b, biomarker, None, None, None, None),
+                    (
+                        ann.id,
+                        "region",
+                        ann.created_at,
+                        now,
+                        ann.created_by,
+                        slide_name,
+                        r,
+                        g,
+                        b,
+                        biomarker,
+                        None,
+                        None,
+                        None,
+                        None,
+                    ),
                 )
                 cur.executemany(
                     "INSERT INTO region_points (annotation_id, seq, px, py) VALUES (?,?,?,?)",
@@ -84,14 +98,42 @@ class AnnotationDB:
             elif isinstance(ann, CellMarker):
                 cur.execute(
                     _INSERT,
-                    (ann.id, "cell_marker", ann.created_at, now, ann.created_by,
-                     slide_name, r, g, b, biomarker, ann.x, ann.y, ann.w, ann.h),
+                    (
+                        ann.id,
+                        "cell_marker",
+                        ann.created_at,
+                        now,
+                        ann.created_by,
+                        slide_name,
+                        r,
+                        g,
+                        b,
+                        biomarker,
+                        ann.x,
+                        ann.y,
+                        ann.w,
+                        ann.h,
+                    ),
                 )
             elif isinstance(ann, FOVAnnotation):
                 cur.execute(
                     _INSERT,
-                    (ann.id, "fov", ann.created_at, now, ann.created_by,
-                     slide_name, r, g, b, biomarker, ann.x, ann.y, ann.w, ann.h),
+                    (
+                        ann.id,
+                        "fov",
+                        ann.created_at,
+                        now,
+                        ann.created_by,
+                        slide_name,
+                        r,
+                        g,
+                        b,
+                        biomarker,
+                        ann.x,
+                        ann.y,
+                        ann.w,
+                        ann.h,
+                    ),
                 )
             count += 1
         self._conn.commit()
@@ -108,8 +150,21 @@ class AnnotationDB:
         ).fetchall()
         count = 0
         for row in rows:
-            ann_id, ann_type, created_at, modified_at, created_by, \
-                cr, cg, cb, biomarker, x, y, w, h = row
+            (
+                ann_id,
+                ann_type,
+                created_at,
+                modified_at,
+                created_by,
+                cr,
+                cg,
+                cb,
+                biomarker,
+                x,
+                y,
+                w,
+                h,
+            ) = row
             color = (cr or 255, cg or 255, cb or 255)
             meta = dict(
                 created_at=created_at,
@@ -120,23 +175,34 @@ class AnnotationDB:
             )
             if ann_type == "cell_marker":
                 ann: CellMarker | FOVAnnotation | RegionAnnotation = CellMarker(
-                    id=ann_id, x=x, y=y, channel=biomarker,
-                    w=w or 10.0, h=h or 10.0, **meta,
+                    id=ann_id,
+                    x=x,
+                    y=y,
+                    channel=biomarker,
+                    w=w or 10.0,
+                    h=h or 10.0,
+                    **meta,
                 )
             elif ann_type == "fov":
                 ann = FOVAnnotation(
-                    id=ann_id, x=x, y=y, w=w or 512.0, h=h or 512.0,
-                    channel=biomarker, **meta,
+                    id=ann_id,
+                    x=x,
+                    y=y,
+                    w=w or 512.0,
+                    h=h or 512.0,
+                    channel=biomarker,
+                    **meta,
                 )
             elif ann_type == "region":
                 pts = self._conn.execute(
-                    "SELECT px, py FROM region_points "
-                    "WHERE annotation_id = ? ORDER BY seq",
+                    "SELECT px, py FROM region_points WHERE annotation_id = ? ORDER BY seq",
                     (ann_id,),
                 ).fetchall()
                 ann = RegionAnnotation(
-                    id=ann_id, points=[(p[0], p[1]) for p in pts],
-                    channel=biomarker, **meta,
+                    id=ann_id,
+                    points=[(p[0], p[1]) for p in pts],
+                    channel=biomarker,
+                    **meta,
                 )
             else:
                 continue

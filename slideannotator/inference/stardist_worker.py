@@ -7,7 +7,7 @@ from .stardist import StarDistONNX
 
 
 class _Signals(QObject):
-    finished = Signal(list)   # list[list[tuple[float, float]]]
+    finished = Signal(list)  # list[list[tuple[float, float]]]
     error = Signal(str)
 
 
@@ -41,7 +41,7 @@ class StarDistWorker(QRunnable):
                 x, y = int(fov.x), int(fov.y)
                 w, h = int(fov.w), int(fov.h)
                 raw = self._reader.read_region(0, x, y, w, h)  # (C, H, W)
-                channel_img = raw[self._channel_idx]            # (H, W)
+                channel_img = raw[self._channel_idx]  # (H, W)
                 polys = self._model.predict_polygons(channel_img)
                 for poly in polys:
                     all_polygons.append([(px + x, py + y) for px, py in poly])

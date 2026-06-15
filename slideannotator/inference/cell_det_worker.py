@@ -15,7 +15,9 @@ _DEBUG_TILE_DIR.mkdir(parents=True, exist_ok=True)
 
 
 class _Signals(QObject):
-    finished = Signal(list)   # list[tuple[float, float, float, float]]  — scene-space (xmin,ymin,xmax,ymax)
+    finished = Signal(
+        list
+    )  # list[tuple[float, float, float, float]]  — scene-space (xmin,ymin,xmax,ymax)
     error = Signal(str)
 
 

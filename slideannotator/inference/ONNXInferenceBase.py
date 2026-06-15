@@ -100,9 +100,7 @@ class ONNXInferenceBase(abc.ABC):
             else:
                 normalize_scheme = "v0"
 
-            mean, std = default_values.get(
-                normalize_scheme, default_values.get("v2")
-            )
+            mean, std = default_values.get(normalize_scheme, default_values.get("v2"))
 
         # Convert mean and std to numpy arrays of type np.float64 and reshape
         mean = np.float64(np.array(mean).reshape(1, -1))

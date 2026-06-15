@@ -21,7 +21,9 @@ def needs_cell_marker_fovs(output_dir: Path, slide_name: str, store: AnnotationS
                 for m in store.markers.values()
             )
             if has_marker:
-                path = fovs_dir / f"{slide_name}_{channel}_{int(round(fov.x))}_{int(round(fov.y))}.png"
+                path = (
+                    fovs_dir / f"{slide_name}_{channel}_{int(round(fov.x))}_{int(round(fov.y))}.png"
+                )
                 if not path.exists():
                     return True
     return False
@@ -61,6 +63,7 @@ def _save_fov_rgb16(
 ) -> bool:
     """Save a 16-bit RGB PNG: red = annotation channel, green = empty, blue = DAPI/Hoechst."""
     import pyvips
+
     try:
         raw = reader.read_region(0, x, y, w, h)  # (C, h, w) uint16
         red = raw[annot_ch_idx]
@@ -93,7 +96,9 @@ def export_cell_marker_annot(
     for d in (annot_dir, fovs_dir):
         d.mkdir(parents=True, exist_ok=True)
 
-    ch_index: dict[str, int] = {ch.name: i for i, ch in enumerate(reader.channels)} if reader else {}
+    ch_index: dict[str, int] = (
+        {ch.name: i for i, ch in enumerate(reader.channels)} if reader else {}
+    )
     dapi_ch_idx = _find_dapi_channel(reader) if reader else None
     saved = errors = 0
 
@@ -121,11 +126,19 @@ def export_cell_marker_annot(
                 key = f"{stem}_{int(round(fov.x))}_{int(round(fov.y))}"
                 lines.append(f"{key}: {' '.join(boxes)}")
                 if reader and ch_idx is not None:
-                    fov_path = fovs_dir / f"{stem}_{channel}_{int(round(fov.x))}_{int(round(fov.y))}.png"
+                    fov_path = (
+                        fovs_dir / f"{stem}_{channel}_{int(round(fov.x))}_{int(round(fov.y))}.png"
+                    )
                     if not fov_path.exists():
                         ok = _save_fov_rgb16(
-                            fov_path, reader, ch_idx, dapi_ch_idx,
-                            int(fov.x), int(fov.y), int(fov.w), int(fov.h),
+                            fov_path,
+                            reader,
+                            ch_idx,
+                            dapi_ch_idx,
+                            int(fov.x),
+                            int(fov.y),
+                            int(fov.w),
+                            int(fov.h),
                         )
                         saved += ok
                         errors += not ok
@@ -160,7 +173,9 @@ def export_region_annot(
     for d in (annot_dir, fovs_dir):
         d.mkdir(parents=True, exist_ok=True)
 
-    ch_index: dict[str, int] = {ch.name: i for i, ch in enumerate(reader.channels)} if reader else {}
+    ch_index: dict[str, int] = (
+        {ch.name: i for i, ch in enumerate(reader.channels)} if reader else {}
+    )
     dapi_ch_idx = _find_dapi_channel(reader) if reader else None
     saved = errors = 0
 
@@ -184,13 +199,17 @@ def export_region_annot(
             if reader and ch_idx is not None:
                 fov_path = fovs_dir / f"{stem}_{channel}_{x_key}_{y_key}.png"
                 if not fov_path.exists():
-                    ok = _save_fov_rgb16(fov_path, reader, ch_idx, dapi_ch_idx, int(fx), int(fy), fw, fh)
+                    ok = _save_fov_rgb16(
+                        fov_path, reader, ch_idx, dapi_ch_idx, int(fx), int(fy), fw, fh
+                    )
                     saved += ok
                     errors += not ok
 
             overlapping = [
-                r for r in channel_regions
-                if r.points and not (
+                r
+                for r in channel_regions
+                if r.points
+                and not (
                     max(p[0] for p in r.points) < fx
                     or min(p[0] for p in r.points) > fx + fw
                     or max(p[1] for p in r.points) < fy
@@ -228,9 +247,7 @@ def export_region_annot(
     return saved, errors
 
 
-def load_structured(
-    output_dir: Path, slide_path: Path, store: AnnotationStore
-) -> int:
+def load_structured(output_dir: Path, slide_path: Path, store: AnnotationStore) -> int:
     """Load markers, FOVs, and regions from structured annotation directories.
 
     Returns total number of annotations loaded. Clears the store first.
@@ -252,7 +269,7 @@ def load_structured(
     region_fovs_dir = output_dir / "Region Annotations" / "FOVs"
     if region_fovs_dir.exists():
         for png_path in sorted(region_fovs_dir.glob(f"{stem}_*.png")):
-            parts = png_path.stem[len(stem) + 1:].split("_")
+            parts = png_path.stem[len(stem) + 1 :].split("_")
             if len(parts) < 3:
                 continue
             try:
@@ -266,14 +283,14 @@ def load_structured(
 
     if marker_annot_dir.exists():
         for txt_path in sorted(marker_annot_dir.glob(f"{stem}_*.txt")):
-            channel = txt_path.stem[len(stem) + 1:]
+            channel = txt_path.stem[len(stem) + 1 :]
             for line in txt_path.read_text().splitlines():
                 line = line.strip()
                 if not line or ":" not in line:
                     continue
                 key, boxes_str = line.split(":", 1)
                 key = key.strip()
-                coord_part = key[len(stem):]
+                coord_part = key[len(stem) :]
                 coords = coord_part.strip("_").split("_")
                 if len(coords) < 2:
                     continue

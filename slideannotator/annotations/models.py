@@ -37,9 +37,7 @@ class CellMarker:
     type: str = "cell_marker"
 
     @staticmethod
-    def create(
-        x: float, y: float, channel: str, w: float = 10.0, h: float = 10.0
-    ) -> CellMarker:
+    def create(x: float, y: float, channel: str, w: float = 10.0, h: float = 10.0) -> CellMarker:
         return CellMarker(id=str(uuid.uuid4()), x=x, y=y, channel=channel, w=w, h=h)
 
 
@@ -56,12 +54,8 @@ class RegionAnnotation:
     type: str = "region"
 
     @staticmethod
-    def create(
-        points: list[tuple[float, float]], channel: str
-    ) -> RegionAnnotation:
-        return RegionAnnotation(
-            id=str(uuid.uuid4()), points=list(points), channel=channel
-        )
+    def create(points: list[tuple[float, float]], channel: str) -> RegionAnnotation:
+        return RegionAnnotation(id=str(uuid.uuid4()), points=list(points), channel=channel)
 
 
 @dataclass
@@ -80,7 +74,9 @@ class FOVAnnotation:
     type: str = "fov"
 
     @staticmethod
-    def create(x: float, y: float, w: float = 512.0, h: float = 512.0, channel: str = "") -> FOVAnnotation:
+    def create(
+        x: float, y: float, w: float = 512.0, h: float = 512.0, channel: str = ""
+    ) -> FOVAnnotation:
         return FOVAnnotation(id=str(uuid.uuid4()), x=x, y=y, w=w, h=h, channel=channel)
 
 
@@ -92,9 +88,9 @@ def _snapshot_ann(ann: CellMarker | RegionAnnotation | FOVAnnotation):
 
 
 class AnnotationStore(QObject):
-    annotation_added = Signal(str)      # id
-    annotation_removed = Signal(str)    # id
-    annotation_moved = Signal(str)      # id (cell markers only)
+    annotation_added = Signal(str)  # id
+    annotation_removed = Signal(str)  # id
+    annotation_moved = Signal(str)  # id (cell markers only)
     selection_changed = Signal(object)  # set[str]
 
     def __init__(self, parent=None) -> None:
@@ -119,9 +115,7 @@ class AnnotationStore(QObject):
             self._push_undo(lambda aid=m.id: self.delete(aid), lambda s=snap: self._restore(s))
         return m
 
-    def add_region(
-        self, points: list[tuple[float, float]], channel: str
-    ) -> RegionAnnotation:
+    def add_region(self, points: list[tuple[float, float]], channel: str) -> RegionAnnotation:
         r = RegionAnnotation.create(points, channel)
         self._regions[r.id] = r
         self.is_dirty = True
@@ -231,7 +225,9 @@ class AnnotationStore(QObject):
         self._redo_stack.clear()
 
     def all_annotations(self) -> list[CellMarker | RegionAnnotation | FOVAnnotation]:
-        return list(self._markers.values()) + list(self._regions.values()) + list(self._fovs.values())
+        return (
+            list(self._markers.values()) + list(self._regions.values()) + list(self._fovs.values())
+        )
 
     # ------------------------------------------------------------------
     # Undo / Redo
@@ -343,7 +339,9 @@ class AnnotationStore(QObject):
         if not any(originals.get(aid) != new_state.get(aid) for aid in new_state):
             return
         self._push_undo(
-            lambda old=dict(originals): [self._apply_move(aid, state) for aid, state in old.items()],
+            lambda old=dict(originals): [
+                self._apply_move(aid, state) for aid, state in old.items()
+            ],
             lambda new=new_state: [self._apply_move(aid, state) for aid, state in new.items()],
         )
 

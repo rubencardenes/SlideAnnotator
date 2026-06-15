@@ -89,11 +89,7 @@ class ImagePropertiesDialog(QDialog):
         grid.setHorizontalSpacing(16)
         grid.setVerticalSpacing(4)
 
-        px_str = (
-            f"{px_x:.4f} × {px_y:.4f} µm"
-            if px_x or px_y
-            else "not available"
-        )
+        px_str = f"{px_x:.4f} × {px_y:.4f} µm" if px_x or px_y else "not available"
         _row(grid, 0, "Format", fmt)
         _row(grid, 1, "Width", f"{w:,} px")
         _row(grid, 2, "Height", f"{h:,} px")
@@ -104,7 +100,9 @@ class ImagePropertiesDialog(QDialog):
         layout.addWidget(img_box)
 
         # ── Pyramid group ─────────────────────────────────────────────
-        pyr_box = QGroupBox(f"Pyramid  ({reader.level_count} level{'s' if reader.level_count != 1 else ''})")
+        pyr_box = QGroupBox(
+            f"Pyramid  ({reader.level_count} level{'s' if reader.level_count != 1 else ''})"
+        )
         pyr_box.setStyleSheet(_GROUP_STYLE)
         pyr_grid = QGridLayout(pyr_box)
         pyr_grid.setHorizontalSpacing(16)

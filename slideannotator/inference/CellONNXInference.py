@@ -34,6 +34,7 @@ def nms(boxes, scores, iou_threshold):
 
     return keep
 
+
 class CellONNXInfer(ONNXInferenceBase):
     def __init__(
         self,
@@ -44,9 +45,7 @@ class CellONNXInfer(ONNXInferenceBase):
         mean=None,
         std=None,
     ):
-        self.mean, self.stdinv = self.get_normalization_values(
-            mean, std, depth16, normalize_scheme
-        )
+        self.mean, self.stdinv = self.get_normalization_values(mean, std, depth16, normalize_scheme)
 
         self.model_path = model_path
         self.provider = self._resolve_provider(device)
@@ -105,9 +104,7 @@ class CellONNXInferRTDETR(ONNXInferenceBase):
         mean=None,
         std=None,
     ):
-        self.mean, self.stdinv = self.get_normalization_values(
-            mean, std, depth16, normalize_scheme
-        )
+        self.mean, self.stdinv = self.get_normalization_values(mean, std, depth16, normalize_scheme)
 
         self.model_path = model_path
         self.provider = self._resolve_provider(device)
@@ -141,9 +138,7 @@ class CellONNXInferRTDETR(ONNXInferenceBase):
     def _model_forward(self, input_im):
         # run onnx inference
         orig_target_sizes = np.array([input_im.shape[2:4]], dtype="int64")
-        return self.session.run(
-            None, {"images": input_im, "orig_target_sizes": orig_target_sizes}
-        )
+        return self.session.run(None, {"images": input_im, "orig_target_sizes": orig_target_sizes})
 
     def predict(self, input, prob_thresh=0.5, iou_th=0.5):
         input = self.preprocess(input, self.tile_size)
@@ -181,9 +176,7 @@ class CellONNXInferDFINE(ONNXInferenceBase):
         mean=None,
         std=None,
     ):
-        self.mean, self.stdinv = self.get_normalization_values(
-            mean, std, depth16, normalize_scheme
-        )
+        self.mean, self.stdinv = self.get_normalization_values(mean, std, depth16, normalize_scheme)
 
         self.model_path = model_path
         self.provider = self._resolve_provider(device)
@@ -195,9 +188,7 @@ class CellONNXInferDFINE(ONNXInferenceBase):
             )
         self.tile_size = tile_size
 
-    def preprocess(
-        self, input_img: np.array, tile_size: int = 512
-    ) -> np.array:
+    def preprocess(self, input_img: np.array, tile_size: int = 512) -> np.array:
         # input is a numpy array of size (512, 512, 3)
         if len(input_img.shape) != 3:
             print("error input must have three dimensions X,Y,C")
@@ -217,9 +208,7 @@ class CellONNXInferDFINE(ONNXInferenceBase):
     def _model_forward(self, input_im):
         # run onnx inference
         orig_target_sizes = np.array([input_im.shape[2:4]], dtype="int64")
-        return self.session.run(
-            None, {"images": input_im, "orig_target_sizes": orig_target_sizes}
-        )
+        return self.session.run(None, {"images": input_im, "orig_target_sizes": orig_target_sizes})
 
     def predict(self, input, prob_thresh=0.5, iou_th=0.5):
         input = self.preprocess(input, self.tile_size)

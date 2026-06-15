@@ -114,10 +114,15 @@ class SummaryDialog(QDialog):
 
         # -- FOVs --
         fov = stats["fov"]
-        layout.addWidget(_make_section("FOVs", [
-            ("FOVs", f"{fov['count']:,}", ""),
-            ("Slides", str(fov["slides"]), ""),
-        ]))
+        layout.addWidget(
+            _make_section(
+                "FOVs",
+                [
+                    ("FOVs", f"{fov['count']:,}", ""),
+                    ("Slides", str(fov["slides"]), ""),
+                ],
+            )
+        )
 
         # -- Marker Annotations --
         mk = stats["cell_marker"]
@@ -126,18 +131,28 @@ class SummaryDialog(QDialog):
         if names:
             joined = ", ".join(names)
             channels_str = joined if len(joined) <= 60 else joined[:57] + "…"
-        layout.addWidget(_make_section("Marker Annotations", [
-            ("Cell marker annotations", f"{mk['count']:,}", ""),
-            ("Biomarkers", str(mk["biomarkers"]), channels_str),
-            ("Slides", str(mk["slides"]), ""),
-        ]))
+        layout.addWidget(
+            _make_section(
+                "Marker Annotations",
+                [
+                    ("Cell marker annotations", f"{mk['count']:,}", ""),
+                    ("Biomarkers", str(mk["biomarkers"]), channels_str),
+                    ("Slides", str(mk["slides"]), ""),
+                ],
+            )
+        )
 
         # -- Region Annotations --
         rg = stats["region"]
-        layout.addWidget(_make_section("Region Annotations", [
-            ("Region annotations", f"{rg['count']:,}", ""),
-            ("Slides", str(rg["slides"]), ""),
-        ]))
+        layout.addWidget(
+            _make_section(
+                "Region Annotations",
+                [
+                    ("Region annotations", f"{rg['count']:,}", ""),
+                    ("Slides", str(rg["slides"]), ""),
+                ],
+            )
+        )
 
         btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         btns.rejected.connect(self.reject)

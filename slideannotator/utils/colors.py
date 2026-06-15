@@ -30,9 +30,7 @@ _FALLBACK_COLORS: list[tuple[int, int, int]] = [
 ]
 
 
-def assign_channel_color(
-    name: str, used_colors: set[tuple[int, int, int]]
-) -> tuple[int, int, int]:
+def assign_channel_color(name: str, used_colors: set[tuple[int, int, int]]) -> tuple[int, int, int]:
     key = name.lower().replace(" ", "").replace("-", "").replace("_", "")
     for pattern, color in CHANNEL_COLORS.items():
         if pattern in key or key.startswith(pattern):

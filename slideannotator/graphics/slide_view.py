@@ -11,8 +11,8 @@ class SlideView(QGraphicsView):
     MIN_ZOOM = 0.002
     MAX_ZOOM = 40.0
 
-    fov_requested = Signal(object)        # QPointF scene position
-    marker_requested = Signal(object)    # QPointF scene position
+    fov_requested = Signal(object)  # QPointF scene position
+    marker_requested = Signal(object)  # QPointF scene position
     space_pressed = Signal()
     b_pressed = Signal()
 
@@ -21,12 +21,8 @@ class SlideView(QGraphicsView):
         self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
         self.setResizeAnchor(QGraphicsView.ViewportAnchor.AnchorViewCenter)
         self.setDragMode(QGraphicsView.DragMode.NoDrag)
-        self.setOptimizationFlag(
-            QGraphicsView.OptimizationFlag.DontAdjustForAntialiasing, True
-        )
-        self.setViewportUpdateMode(
-            QGraphicsView.ViewportUpdateMode.SmartViewportUpdate
-        )
+        self.setOptimizationFlag(QGraphicsView.OptimizationFlag.DontAdjustForAntialiasing, True)
+        self.setViewportUpdateMode(QGraphicsView.ViewportUpdateMode.SmartViewportUpdate)
         self.setRenderHint(self.renderHints())
         self.setBackgroundRole(self.backgroundRole())
         self.setStyleSheet("background: #1a1a1a;")

@@ -10,8 +10,8 @@ from .tile_cache import LRUCache, TileKey
 
 
 class _Signals(QObject):
-    tile_ready = Signal(object, object, int)   # TileKey, QImage, generation
-    tile_failed = Signal(object, str, int)     # TileKey, error, generation
+    tile_ready = Signal(object, object, int)  # TileKey, QImage, generation
+    tile_failed = Signal(object, str, int)  # TileKey, error, generation
 
 
 class TileWorker(QRunnable):
@@ -43,9 +43,7 @@ class TileWorker(QRunnable):
             rgba = composite_channels(raw, self._settings)
             rgba = np.ascontiguousarray(rgba)
             h, w = rgba.shape[:2]
-            qimage = QImage(
-                rgba.data, w, h, w * 4, QImage.Format.Format_RGBA8888
-            ).copy()
+            qimage = QImage(rgba.data, w, h, w * 4, QImage.Format.Format_RGBA8888).copy()
 
             self.signals.tile_ready.emit(key, qimage, self._generation)
         except Exception as exc:

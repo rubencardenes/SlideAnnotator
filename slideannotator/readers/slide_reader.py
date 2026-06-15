@@ -131,11 +131,7 @@ class OmeTifSlideReader(ImageReaderOmeTif):
         buf = img.write_to_memory()
         dtype = self._vips_dtype(img.format)
         raw = np.frombuffer(buf, dtype=dtype)
-        raw = (
-            raw.reshape(lh, lw, img.bands)[:, :, 0]
-            if img.bands > 1
-            else raw.reshape(lh, lw)
-        )
+        raw = raw.reshape(lh, lw, img.bands)[:, :, 0] if img.bands > 1 else raw.reshape(lh, lw)
         return raw.astype(np.uint16) if raw.dtype != np.uint16 else raw.copy()
 
     def compute_channel_quantiles(
@@ -194,9 +190,13 @@ class OmeTifSlideReader(ImageReaderOmeTif):
     @staticmethod
     def _vips_dtype(fmt: str) -> type:
         mapping = {
-            "uchar": np.uint8, "char": np.int8,
-            "ushort": np.uint16, "short": np.int16,
-            "uint": np.uint32, "int": np.int32,
-            "float": np.float32, "double": np.float64,
+            "uchar": np.uint8,
+            "char": np.int8,
+            "ushort": np.uint16,
+            "short": np.int16,
+            "uint": np.uint32,
+            "int": np.int32,
+            "float": np.float32,
+            "double": np.float64,
         }
         return mapping.get(fmt, np.uint8)

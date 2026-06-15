@@ -145,6 +145,4 @@ class _ImageItem(QWidget):
         layout.addWidget(self._stats_lbl)
 
     def set_counts(self, markers: int, regions: int, fovs: int) -> None:
-        self._stats_lbl.setText(
-            f"Markers: {markers}   Regions: {regions}   FOVs: {fovs}"
-        )
+        self._stats_lbl.setText(f"Markers: {markers}   Regions: {regions}   FOVs: {fovs}")

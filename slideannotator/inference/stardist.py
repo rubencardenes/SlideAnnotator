@@ -122,8 +122,8 @@ class StarDistONNX:
             Integer array ``(H*2, W*2)``; background = 0, each object has a
             unique positive integer label.
         """
-        prob_map = prob[0, :, :, 0]                    # (out_h, out_w)
-        dist_map = np.maximum(1e-3, dist[0])           # (out_h, out_w, n_rays)
+        prob_map = prob[0, :, :, 0]  # (out_h, out_w)
+        dist_map = np.maximum(1e-3, dist[0])  # (out_h, out_w, n_rays)
         out_h, out_w = prob_map.shape
         inp_h, inp_w = out_h * _OUTPUT_SCALE, out_w * _OUTPUT_SCALE
 

@@ -218,7 +218,7 @@ def _icon_summary(size: int = _ICON_SZ) -> QIcon:
     p.setPen(pen)
     lx, rx = size * 0.18, size * 0.82
     bars = [
-        (size * 0.20, size * 0.38, rx),   # top bar
+        (size * 0.20, size * 0.38, rx),  # top bar
         (size * 0.44, size * 0.54, rx * 0.78),  # middle bar (shorter)
         (size * 0.67, size * 0.70, rx * 0.58),  # bottom bar (shortest)
     ]
@@ -288,14 +288,16 @@ def _icon_stardist_run(size: int = _ICON_SZ) -> QIcon:
     n = 8
     rs = [0.40, 0.34, 0.41, 0.36, 0.43, 0.35, 0.39, 0.37]
     pts = [
-        (c + size * rs[i] * math.cos(math.radians(i * 360.0 / n - 70)),
-         c + size * rs[i] * math.sin(math.radians(i * 360.0 / n - 70)))
+        (
+            c + size * rs[i] * math.cos(math.radians(i * 360.0 / n - 70)),
+            c + size * rs[i] * math.sin(math.radians(i * 360.0 / n - 70)),
+        )
         for i in range(n)
     ]
     path = QPainterPath()
     path.moveTo(*pts[0])
     for i in range(n):
-        p0, p1, p2, p3 = pts[(i-1) % n], pts[i], pts[(i+1) % n], pts[(i+2) % n]
+        p0, p1, p2, p3 = pts[(i - 1) % n], pts[i], pts[(i + 1) % n], pts[(i + 2) % n]
         cp1 = (p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6)
         cp2 = (p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6)
         path.cubicTo(cp1[0], cp1[1], cp2[0], cp2[1], p2[0], p2[1])
@@ -551,10 +553,14 @@ class AnnotationToolbar(QToolBar):
         self._pan_btn = _make_tool_btn(_icon_pan(), "Pan  [right-click drag in any mode]")
         self._marker_btn = _make_tool_btn(_icon_marker(), "Cell Marker: click to place")
         self._region_btn = _make_tool_btn(_icon_region(), "Region: drag to draw freehand")
-        self._select_btn = _make_tool_btn(_icon_select(), "Select: click/drag to move · D to delete")
+        self._select_btn = _make_tool_btn(
+            _icon_select(), "Select: click/drag to move · D to delete"
+        )
         self._eye_btn = _make_tool_btn(_icon_eye(), "Toggle annotations [Space]", checkable=True)
         self._eye_btn.setChecked(True)
-        self._box_btn = _make_tool_btn(_icon_box_marker(), "Show markers as bounding boxes [B]", checkable=True)
+        self._box_btn = _make_tool_btn(
+            _icon_box_marker(), "Show markers as bounding boxes [B]", checkable=True
+        )
         self._box_btn.setChecked(False)
 
         self._undo_btn = _make_tool_btn(_icon_undo(), "Undo [Ctrl+Z]", checkable=False)

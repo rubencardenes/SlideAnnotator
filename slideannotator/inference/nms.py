@@ -22,9 +22,7 @@ def _normalize_grid(grid, n):
     try:
         grid = tuple(grid)
         (
-            len(grid) == n
-            and all(map(np.isscalar, grid))
-            and all(map(_is_power_of_2, grid))
+            len(grid) == n and all(map(np.isscalar, grid)) and all(map(_is_power_of_2, grid))
         ) or _raise(TypeError())
         return tuple(int(g) for g in grid)
     except (TypeError, AssertionError):
@@ -41,10 +39,7 @@ def _ind_prob_thresh(prob, prob_thresh, b=2):
     if b is not None:
         _ind_thresh = np.zeros_like(ind_thresh)
         ss = tuple(
-            slice(
-                _bs[0] if _bs[0] > 0 else None, -_bs[1] if _bs[1] > 0 else None
-            )
-            for _bs in b
+            slice(_bs[0] if _bs[0] > 0 else None, -_bs[1] if _bs[1] > 0 else None) for _bs in b
         )
         _ind_thresh[ss] = True
         ind_thresh &= _ind_thresh

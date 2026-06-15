@@ -64,9 +64,7 @@ class ShiftSelectMixin:
         else:
             self._sx_was_selected = False
             self._sx_mode = "rubber_banding"
-            self._sx_rubber_item = QGraphicsRectItem(
-                QRectF(scene_pos.x(), scene_pos.y(), 0, 0)
-            )
+            self._sx_rubber_item = QGraphicsRectItem(QRectF(scene_pos.x(), scene_pos.y(), 0, 0))
             pen = QPen(QColor(100, 180, 255))
             pen.setCosmetic(True)
             pen.setStyle(Qt.PenStyle.DashLine)
@@ -119,11 +117,7 @@ class ShiftSelectMixin:
         if self._sx_mode in ("pre_drag", "dragging"):
             if self._sx_moved and self._sx_drag_originals:
                 self._store.record_batch_move(self._sx_drag_originals)
-            if (
-                not self._sx_moved
-                and self._sx_hit_id is not None
-                and self._sx_was_selected
-            ):
+            if not self._sx_moved and self._sx_hit_id is not None and self._sx_was_selected:
                 # No movement — treat as a toggle-off click on an already-selected item
                 self._store.toggle_selected(self._sx_hit_id)
             self._sx_cancel()

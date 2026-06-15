@@ -4,7 +4,7 @@ from PySide6.QtCore import QPointF, QRectF
 from PySide6.QtGui import QColor, QPen
 from PySide6.QtWidgets import QGraphicsItem, QStyleOptionGraphicsItem
 
-SCREEN_ARM = 5.0   # half-arm length in screen pixels
+SCREEN_ARM = 5.0  # half-arm length in screen pixels
 
 
 class CellDetCrossItem(QGraphicsItem):

@@ -19,17 +19,10 @@ def dist_to_coord(dist, points):
     """
     dist = np.asarray(dist)
     points = np.asarray(points)
-    assert (
-        dist.ndim == 2
-        and points.ndim == 2
-        and len(dist) == len(points)
-        and points.shape[1] == 2
-    )
+    assert dist.ndim == 2 and points.ndim == 2 and len(dist) == len(points) and points.shape[1] == 2
     n_rays = dist.shape[1]
     phis = ray_angles(n_rays)
-    coord = points[..., np.newaxis] + (
-        dist[:, np.newaxis] * np.array([np.sin(phis), np.cos(phis)])
-    )
+    coord = points[..., np.newaxis] + (dist[:, np.newaxis] * np.array([np.sin(phis), np.cos(phis)]))
     return coord
 
 
@@ -47,8 +40,7 @@ def _check_label_array(y, name=None, check_sequential=False):
     err = ValueError(
         "{label} must be an array of {integers}.".format(
             label="labels" if name is None else name,
-            integers=("sequential " if check_sequential else "")
-            + "non-negative integers",
+            integers=("sequential " if check_sequential else "") + "non-negative integers",
         )
     )
     is_array_of_integers(y) or _raise(err)
@@ -73,9 +65,7 @@ def polygons_to_label_coord(coord, shape, labels=None):
         labels = np.arange(len(coord))
 
     _check_label_array(labels, "labels")
-    assert (
-        coord.ndim == 3 and coord.shape[1] == 2 and len(coord) == len(labels)
-    )
+    assert coord.ndim == 3 and coord.shape[1] == 2 and len(coord) == len(labels)
 
     lbl = np.zeros(shape, np.int32)
 

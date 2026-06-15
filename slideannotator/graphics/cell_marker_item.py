@@ -75,6 +75,7 @@ class CellMarkerItem(QGraphicsItem):
 
     def shape(self):
         from PySide6.QtGui import QPainterPath
+
         path = QPainterPath()
         path.addEllipse(QPointF(0, 0), 2000, 2000)
         return path

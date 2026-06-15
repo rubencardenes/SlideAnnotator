@@ -83,9 +83,7 @@ class SlideScene(QGraphicsScene):
             # Thumbnail already covers the whole image at this level.
             self._cleanup_distant_tiles(viewport_rect)
             return
-        self._tile_manager.request_tiles(
-            viewport_rect, zoom, self._channel_settings
-        )
+        self._tile_manager.request_tiles(viewport_rect, zoom, self._channel_settings)
         self._cleanup_distant_tiles(viewport_rect)
 
     def set_channel_settings(self, settings: list[ChannelSettings]) -> None:

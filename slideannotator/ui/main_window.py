@@ -61,7 +61,7 @@ class MainWindow(QMainWindow):
         self._tools: dict[str, object] = {}
         self._current_tool = None
         self._stardist_model: StarDistONNX | None = None
-        self._stardist_outline_color = None   # persists across image loads
+        self._stardist_outline_color = None  # persists across image loads
         self._stardist_outline_width = None
         self._cell_det_model: CellONNXInferDFINE | None = None
         self._cell_det_boxes: list[tuple[float, float, float, float]] = []
@@ -121,9 +121,7 @@ class MainWindow(QMainWindow):
         self._channel_panel = ChannelPanel()
         self._channel_panel.setMinimumWidth(200)
         self._channel_panel.setMaximumWidth(280)
-        self._channel_panel.channel_visibility_changed.connect(
-            self._on_channel_visibility
-        )
+        self._channel_panel.channel_visibility_changed.connect(self._on_channel_visibility)
         self._channel_panel.channel_color_changed.connect(self._on_channel_color)
         self._channel_panel.channel_range_changed.connect(self._on_channel_range)
         self._channel_panel.channel_selected.connect(self._on_active_channel)
@@ -242,21 +240,15 @@ class MainWindow(QMainWindow):
             )
 
             # Scene
-            scene = SlideScene(
-                self._tile_manager, self._store, self._channel_settings
-            )
+            scene = SlideScene(self._tile_manager, self._store, self._channel_settings)
             scene.load_slide(self._reader)
             if self._stardist_outline_color is not None:
-                scene.set_stardist_style(
-                    self._stardist_outline_color, self._stardist_outline_width
-                )
+                scene.set_stardist_style(self._stardist_outline_color, self._stardist_outline_width)
             self._view.setScene(scene)
             self._view.fit_to_slide()
 
             # Channel panel
-            self._channel_panel.load_channels(
-                self._reader.channels, self._channel_settings
-            )
+            self._channel_panel.load_channels(self._reader.channels, self._channel_settings)
 
             # Active channel
             if self._reader.channels:
@@ -349,7 +341,10 @@ class MainWindow(QMainWindow):
                         pass
             try:
                 s, e = export_cell_marker_annot(
-                    output_dir, slide_name, temp_store, reader,
+                    output_dir,
+                    slide_name,
+                    temp_store,
+                    reader,
                     selected_channels=selected,
                 )
             finally:
@@ -387,8 +382,7 @@ class MainWindow(QMainWindow):
             len(self._store.fovs),
         )
         QMessageBox.information(
-            self, "Annotations Saved",
-            f"Saved {count} annotation(s) to database."
+            self, "Annotations Saved", f"Saved {count} annotation(s) to database."
         )
 
     def _load_from_db(self) -> None:
@@ -400,13 +394,11 @@ class MainWindow(QMainWindow):
             scene.sync_from_store()
         if count > 0:
             QMessageBox.information(
-                self, "Annotations Loaded",
-                f"Loaded {count} annotation(s) from database."
+                self, "Annotations Loaded", f"Loaded {count} annotation(s) from database."
             )
         else:
             QMessageBox.information(
-                self, "No Annotations Found",
-                "No saved annotations found for this image."
+                self, "No Annotations Found", "No saved annotations found for this image."
             )
 
     def _export_region_annot(self) -> None:
@@ -437,7 +429,10 @@ class MainWindow(QMainWindow):
                         pass
             try:
                 s, e = export_region_annot(
-                    output_dir, slide_name, temp_store, reader,
+                    output_dir,
+                    slide_name,
+                    temp_store,
+                    reader,
                     selected_channels=selected,
                 )
             finally:
@@ -518,9 +513,7 @@ class MainWindow(QMainWindow):
         if isinstance(scene, SlideScene):
             scene.set_channel_settings(self._channel_settings)
             scene.refresh_thumbnail()
-            vr = self._view.mapToScene(
-                self._view.viewport().rect()
-            ).boundingRect()
+            vr = self._view.mapToScene(self._view.viewport().rect()).boundingRect()
             zoom = self._view.current_zoom()
             scene.update_viewport(vr, zoom)
 
@@ -562,16 +555,18 @@ class MainWindow(QMainWindow):
                 break
         if channel_idx is None:
             QMessageBox.warning(
-                self, "No DAPI/Hoechst Channel",
-                "No channel named DAPI or Hoechst found in this image."
+                self,
+                "No DAPI/Hoechst Channel",
+                "No channel named DAPI or Hoechst found in this image.",
             )
             return
 
         model_path = get_settings().stardist_model
         if model_path is None or not model_path.exists():
             QMessageBox.warning(
-                self, "Model Not Found",
-                f"StarDist model not found:\n{model_path}\n\nCheck stardist_model in settings.yaml."
+                self,
+                "Model Not Found",
+                f"StarDist model not found:\n{model_path}\n\nCheck stardist_model in settings.yaml.",
             )
             return
 
@@ -610,15 +605,14 @@ class MainWindow(QMainWindow):
         if not isinstance(scene, SlideScene):
             return
         from PySide6.QtGui import QColor as _QColor
+
         cur_color = self._stardist_outline_color or _QColor(0, 230, 180)
         cur_width = self._stardist_outline_width or 2
         dlg = StarDistSettingsDialog(cur_color, cur_width, self)
         if dlg.exec():
             self._stardist_outline_color = dlg.selected_color
             self._stardist_outline_width = dlg.selected_width
-            scene.set_stardist_style(
-                self._stardist_outline_color, self._stardist_outline_width
-            )
+            scene.set_stardist_style(self._stardist_outline_color, self._stardist_outline_width)
 
     # ------------------------------------------------------------------
     def _run_cell_det(self) -> None:
@@ -637,8 +631,9 @@ class MainWindow(QMainWindow):
         model_path = get_settings().cell_det_model
         if model_path is None or not model_path.exists():
             QMessageBox.warning(
-                self, "Model Not Found",
-                f"Cell detection model not found:\n{model_path}\n\nCheck cell_det_model in settings.yaml."
+                self,
+                "Model Not Found",
+                f"Cell detection model not found:\n{model_path}\n\nCheck cell_det_model in settings.yaml.",
             )
             return
 
@@ -658,8 +653,9 @@ class MainWindow(QMainWindow):
                 break
         if dapi_idx is None:
             QMessageBox.warning(
-                self, "No DAPI/Hoechst Channel",
-                "No DAPI or Hoechst channel found. Cannot run cell detection."
+                self,
+                "No DAPI/Hoechst Channel",
+                "No DAPI or Hoechst channel found. Cannot run cell detection.",
             )
             return
 
@@ -670,14 +666,15 @@ class MainWindow(QMainWindow):
                 break
         if marker_idx is None:
             QMessageBox.warning(
-                self, "No Active Channel",
-                "No active channel selected. Click a channel in the channel panel first."
+                self,
+                "No Active Channel",
+                "No active channel selected. Click a channel in the channel panel first.",
             )
             return
 
         channel_r = marker_idx  # tile[0] = marker  (red channel)
-        channel_g = None        # tile[1] = zeros   (green channel empty)
-        channel_b = dapi_idx    # tile[2] = DAPI    (blue channel)
+        channel_g = None  # tile[1] = zeros   (green channel empty)
+        channel_b = dapi_idx  # tile[2] = DAPI    (blue channel)
 
         self._toolbar.set_cell_det_running(True)
         worker = CellDetWorker(
@@ -722,8 +719,7 @@ class MainWindow(QMainWindow):
         self._store.add_marker_batch(markers_data)
         self._update_undo_redo_state()
         QMessageBox.information(
-            self, "Annotations Created",
-            f"Created {len(markers_data)} cell marker annotation(s)."
+            self, "Annotations Created", f"Created {len(markers_data)} cell marker annotation(s)."
         )
 
     # ------------------------------------------------------------------

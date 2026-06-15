@@ -6,7 +6,7 @@ from pathlib import Path
 import yaml
 
 _SEARCH_PATHS = [
-    Path(__file__).parent.parent / "settings.yaml",          # project root (dev)
+    Path(__file__).parent.parent / "settings.yaml",  # project root (dev)
     Path.home() / ".config" / "slideannotator" / "settings.yaml",  # user config
 ]
 

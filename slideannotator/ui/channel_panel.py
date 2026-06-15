@@ -96,8 +96,7 @@ class ChannelRow(QFrame):
 
         self._fov_count_lbl = QLabel("0")
         self._fov_count_lbl.setStyleSheet(
-            "color: #555; font-size: 10px; background: #333; "
-            "border-radius: 8px; padding: 1px 5px;"
+            "color: #555; font-size: 10px; background: #333; border-radius: 8px; padding: 1px 5px;"
         )
         self._fov_count_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
@@ -290,9 +289,7 @@ class ChannelPanel(QWidget):
         for row in self._rows:
             row.setVisible(not annotated_only or row._fov_count > 0)
 
-    def load_channels(
-        self, channels: list[ChannelInfo], settings: list[ChannelSettings]
-    ) -> None:
+    def load_channels(self, channels: list[ChannelInfo], settings: list[ChannelSettings]) -> None:
         for row in self._rows:
             row.setParent(None)
         self._rows.clear()
@@ -306,9 +303,7 @@ class ChannelPanel(QWidget):
             row.visibility_changed.connect(
                 lambda v, i=idx: self.channel_visibility_changed.emit(i, v)
             )
-            row.color_changed.connect(
-                lambda c, i=idx: self.channel_color_changed.emit(i, c)
-            )
+            row.color_changed.connect(lambda c, i=idx: self.channel_color_changed.emit(i, c))
             row.range_changed.connect(
                 lambda mn, mx, i=idx: self.channel_range_changed.emit(i, mn, mx)
             )

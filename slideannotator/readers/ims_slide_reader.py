@@ -29,9 +29,7 @@ class ImsSlideReader(ImageReaderIms):
         self.level_dimensions: list[tuple[int, int]] = [
             (entry["width"], entry["height"]) for entry in pyr_info
         ]
-        self.level_downsamples: list[float] = [
-            float(entry["factor"]) for entry in pyr_info
-        ]
+        self.level_downsamples: list[float] = [float(entry["factor"]) for entry in pyr_info]
         self.level_count = len(self.level_dimensions)
 
         raw_names: list[str] = meta.get("channel_names", [])
@@ -98,8 +96,7 @@ class ImsSlideReader(ImageReaderIms):
             return np.zeros((len(self.channels), ts, ts), dtype=np.uint16)
 
         arrays = [
-            self._read_level_region(level, i, lx, ly, ts, ts)
-            for i in range(len(self.channels))
+            self._read_level_region(level, i, lx, ly, ts, ts) for i in range(len(self.channels))
         ]
         return np.stack(arrays)
 
@@ -128,10 +125,7 @@ class ImsSlideReader(ImageReaderIms):
 
     def read_region(self, level: int, x: int, y: int, w: int, h: int) -> np.ndarray:
         """Return (C, h, w) uint16 for the requested region at the given level."""
-        arrays = [
-            self._read_level_region(level, i, x, y, w, h)
-            for i in range(len(self.channels))
-        ]
+        arrays = [self._read_level_region(level, i, x, y, w, h) for i in range(len(self.channels))]
         return np.stack(arrays)
 
     def close(self) -> None:

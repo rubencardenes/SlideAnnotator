@@ -65,9 +65,7 @@ class TileManager(QObject):
 
                 if key not in self._in_flight:
                     self._in_flight.add(key)
-                    worker = TileWorker(
-                        key, self._reader, self._raw_cache, settings_copy, gen
-                    )
+                    worker = TileWorker(key, self._reader, self._raw_cache, settings_copy, gen)
                     worker.signals.tile_ready.connect(self._on_worker_ready)
                     worker.signals.tile_failed.connect(self._on_worker_failed)
                     self._thread_pool.start(worker)

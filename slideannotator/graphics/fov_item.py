@@ -7,7 +7,9 @@ from PySide6.QtWidgets import QGraphicsItem, QGraphicsRectItem, QGraphicsSimpleT
 class FOVItem(QGraphicsRectItem):
     """Field-of-view rectangle annotation."""
 
-    def __init__(self, ann_id: str, x: float, y: float, w: float, h: float, color: QColor, label: str = "") -> None:
+    def __init__(
+        self, ann_id: str, x: float, y: float, w: float, h: float, color: QColor, label: str = ""
+    ) -> None:
         self._label: QGraphicsSimpleTextItem | None = None  # guard before super().__init__
         super().__init__(x, y, w, h)
         self._ann_id = ann_id

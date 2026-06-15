@@ -66,8 +66,7 @@ class StarDistSettingsDialog(QDialog):
 
     def _update_color_btn(self) -> None:
         self._color_btn.setStyleSheet(
-            f"background: {self._color.name()};"
-            "border: 1px solid #666; border-radius: 4px;"
+            f"background: {self._color.name()};border: 1px solid #666; border-radius: 4px;"
         )
 
     @property
