@@ -41,6 +41,7 @@ class SlideScene(QGraphicsScene):
         self._cell_det_color = QColor(255, 100, 80)
         self._marker_show_box = False
 
+        self._region_fill_opacity: float = 40 / 255
         self._active_channel: str = ""
 
         self._current_viewport: QRectF | None = None
@@ -232,9 +233,14 @@ class SlideScene(QGraphicsScene):
         self._marker_items[ann.id] = item
         self.addItem(item)
 
+    def set_region_fill_opacity(self, opacity: float) -> None:
+        self._region_fill_opacity = opacity
+        for item in self._region_items.values():
+            item.set_fill_opacity(opacity)
+
     def _add_region_item(self, ann: RegionAnnotation) -> None:
         color = self._channel_color(ann.channel)
-        item = RegionItem(ann.id, color)
+        item = RegionItem(ann.id, color, fill_opacity=self._region_fill_opacity)
         polygon = QPolygonF()
         for x, y in ann.points:
             polygon.append(QPointF(x, y))

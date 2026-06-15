@@ -44,6 +44,15 @@ class ImsSlideReader(ImageReaderIms):
             used_colors.add(color)
             self.channels.append(ChannelInfo(index=i, name=label, color=color))
 
+        if self._res_keys:
+            try:
+                ds0 = self._f["DataSet"][self._res_keys[0]]["TimePoint 0"]["Channel 0"]["Data"]
+                self.metadata["bit_depth"] = int(ds0.dtype.itemsize * 8)
+            except Exception:
+                self.metadata["bit_depth"] = 16
+        else:
+            self.metadata["bit_depth"] = 16
+
         logger.info("Opened: %s", path.name)
         logger.info(
             "  Channels: %d  (%s)",

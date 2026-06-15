@@ -70,6 +70,10 @@ class OmeTifSlideReader(ImageReaderOmeTif):
             used_colors.add(color)
             self.channels.append(ChannelInfo(index=i, name=label, color=color))
 
+        sample = self._tile_images.get((0, 0))
+        _bit_map = {"uchar": 8, "ushort": 16, "uint": 32, "float": 32, "double": 64}
+        self.metadata["bit_depth"] = _bit_map.get(sample.format if sample else "ushort", 16)
+
         logger.info("Opened: %s", path.name)
         logger.info(
             "  Channels: %d  (%s)",

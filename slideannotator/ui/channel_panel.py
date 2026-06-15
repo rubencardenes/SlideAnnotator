@@ -66,6 +66,7 @@ class ChannelRow(QFrame):
         super().__init__(parent)
         self._info = info
         self._settings = settings
+        self._fov_count: int = 0
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -117,7 +118,10 @@ class ChannelRow(QFrame):
         val_style = "color: #ccc; font-size: 10px; min-width: 38px;"
 
         # Min slider row
-        min_row = QHBoxLayout()
+        self._min_row_widget = QWidget()
+        self._min_row_widget.setStyleSheet("background: transparent;")
+        min_row = QHBoxLayout(self._min_row_widget)
+        min_row.setContentsMargins(0, 0, 0, 0)
         min_row.setSpacing(4)
         min_lbl = QLabel("Min")
         min_lbl.setStyleSheet(lbl_style)
@@ -131,10 +135,13 @@ class ChannelRow(QFrame):
         min_row.addWidget(min_lbl)
         min_row.addWidget(self._min_slider)
         min_row.addWidget(self._min_val_lbl)
-        layout.addLayout(min_row)
+        layout.addWidget(self._min_row_widget)
 
         # Max slider row
-        max_row = QHBoxLayout()
+        self._max_row_widget = QWidget()
+        self._max_row_widget.setStyleSheet("background: transparent;")
+        max_row = QHBoxLayout(self._max_row_widget)
+        max_row.setContentsMargins(0, 0, 0, 0)
         max_row.setSpacing(4)
         max_lbl = QLabel("Max")
         max_lbl.setStyleSheet(lbl_style)
@@ -148,7 +155,7 @@ class ChannelRow(QFrame):
         max_row.addWidget(max_lbl)
         max_row.addWidget(self._max_slider)
         max_row.addWidget(self._max_val_lbl)
-        layout.addLayout(max_row)
+        layout.addWidget(self._max_row_widget)
 
         self._min_slider.valueChanged.connect(self._on_min_changed)
         self._max_slider.valueChanged.connect(self._on_max_changed)
@@ -169,7 +176,12 @@ class ChannelRow(QFrame):
         self.selected.emit()
         super().mousePressEvent(event)
 
+    def set_sliders_visible(self, visible: bool) -> None:
+        self._min_row_widget.setVisible(visible)
+        self._max_row_widget.setVisible(visible)
+
     def update_fov_count(self, count: int) -> None:
+        self._fov_count = count
         self._fov_count_lbl.setText(str(count))
         color = "#7af" if count > 0 else "#555"
         self._fov_count_lbl.setStyleSheet(
@@ -208,22 +220,45 @@ class ChannelPanel(QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
 
-        # Header with title and select-all checkbox
-        header = QHBoxLayout()
-        header.setContentsMargins(8, 6, 8, 6)
+        check_style = "color: #888; font-size: 11px;"
+
+        # First header row: title + select-all
+        row1 = QHBoxLayout()
+        row1.setContentsMargins(8, 6, 8, 2)
         title = QLabel("Channels")
         title.setStyleSheet("color: #aaa; font-size: 12px; font-weight: bold;")
         self._select_all_check = QCheckBox("All")
         self._select_all_check.setChecked(True)
-        self._select_all_check.setStyleSheet("color: #888; font-size: 11px;")
+        self._select_all_check.setStyleSheet(check_style)
         self._select_all_check.stateChanged.connect(self._on_select_all)
-        header.addWidget(title)
-        header.addStretch()
-        header.addWidget(self._select_all_check)
+        row1.addWidget(title)
+        row1.addStretch()
+        row1.addWidget(self._select_all_check)
+
+        # Second header row: compact + annotated-only
+        row2 = QHBoxLayout()
+        row2.setContentsMargins(8, 2, 8, 6)
+        self._compact_check = QCheckBox("Compact")
+        self._compact_check.setChecked(False)
+        self._compact_check.setStyleSheet(check_style)
+        self._compact_check.stateChanged.connect(self._on_compact_changed)
+        self._annotated_check = QCheckBox("Annotated only")
+        self._annotated_check.setChecked(False)
+        self._annotated_check.setStyleSheet(check_style)
+        self._annotated_check.stateChanged.connect(self._on_annotated_changed)
+        row2.addWidget(self._compact_check)
+        row2.addStretch()
+        row2.addWidget(self._annotated_check)
+
+        header_layout = QVBoxLayout()
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        header_layout.setSpacing(0)
+        header_layout.addLayout(row1)
+        header_layout.addLayout(row2)
 
         header_widget = QWidget()
         header_widget.setStyleSheet("background: #161616;")
-        header_widget.setLayout(header)
+        header_widget.setLayout(header_layout)
         outer.addWidget(header_widget)
 
         scroll = QScrollArea()
@@ -244,6 +279,16 @@ class ChannelPanel(QWidget):
             row._check.setChecked(checked)
             row._check.blockSignals(False)
             self.channel_visibility_changed.emit(i, checked)
+
+    def _on_compact_changed(self, state: int) -> None:
+        compact = state != Qt.CheckState.Unchecked.value
+        for row in self._rows:
+            row.set_sliders_visible(not compact)
+
+    def _on_annotated_changed(self, state: int) -> None:
+        annotated_only = state != Qt.CheckState.Unchecked.value
+        for row in self._rows:
+            row.setVisible(not annotated_only or row._fov_count > 0)
 
     def load_channels(
         self, channels: list[ChannelInfo], settings: list[ChannelSettings]
@@ -273,12 +318,20 @@ class ChannelPanel(QWidget):
 
         self._list_layout.addStretch()
 
+        compact = self._compact_check.isChecked()
+        if compact:
+            for row in self._rows:
+                row.set_sliders_visible(False)
+
         if self._rows:
             self._on_row_selected(0)
 
     def update_fov_counts(self, counts: dict[str, int]) -> None:
+        annotated_only = self._annotated_check.isChecked()
         for row in self._rows:
             row.update_fov_count(counts.get(row._info.name, 0))
+            if annotated_only:
+                row.setVisible(row._fov_count > 0)
 
     def _on_row_selected(self, index: int) -> None:
         for i, row in enumerate(self._rows):

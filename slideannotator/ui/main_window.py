@@ -39,6 +39,7 @@ from ..viewsettings import load_view_settings, save_view_settings
 from .annotation_toolbar import AnnotationToolbar
 from .channel_panel import ChannelPanel
 from .image_list_panel import ImageListPanel
+from .image_properties_dialog import ImagePropertiesDialog
 from .marker_selection_dialog import MarkerSelectionDialog
 from .stardist_settings_dialog import StarDistSettingsDialog
 from .summary_dialog import SummaryDialog
@@ -101,6 +102,7 @@ class MainWindow(QMainWindow):
         self._toolbar.undo_requested.connect(self._undo)
         self._toolbar.redo_requested.connect(self._redo)
         self._toolbar.stardist_settings_requested.connect(self._show_stardist_settings)
+        self._toolbar.region_opacity_changed.connect(self._on_region_opacity_changed)
         self.addToolBar(self._toolbar)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -157,6 +159,11 @@ class MainWindow(QMainWindow):
         open_action = file_menu.addAction("&Open Image…")
         open_action.setShortcut("Ctrl+O")
         open_action.triggered.connect(self._open_dialog)
+
+        self._image_properties_action = file_menu.addAction("Image &Properties…")
+        self._image_properties_action.setShortcut("Ctrl+I")
+        self._image_properties_action.triggered.connect(self._show_image_properties)
+        self._image_properties_action.setEnabled(False)
 
         self._save_action = file_menu.addAction("&Save Annotations")
         self._save_action.setShortcut("Ctrl+S")
@@ -282,6 +289,7 @@ class MainWindow(QMainWindow):
 
             self._save_action.setEnabled(True)
             self._load_action.setEnabled(True)
+            self._image_properties_action.setEnabled(True)
             self._toolbar.set_save_load_enabled(True)
             self.setWindowTitle(f"SlideAnnotator — {path.name}")
 
@@ -442,6 +450,12 @@ class MainWindow(QMainWindow):
             msg += f"\n({errors} error(s))"
         QMessageBox.information(self, "Region Annotations Exported", msg)
 
+    def _show_image_properties(self) -> None:
+        if self._reader is None:
+            return
+        dlg = ImagePropertiesDialog(self._reader, parent=self)
+        dlg.exec()
+
     def _show_summary(self) -> None:
         dlg = SummaryDialog(parent=self)
         dlg.exec()
@@ -509,6 +523,11 @@ class MainWindow(QMainWindow):
             ).boundingRect()
             zoom = self._view.current_zoom()
             scene.update_viewport(vr, zoom)
+
+    def _on_region_opacity_changed(self, opacity: float) -> None:
+        scene = self._view.scene()
+        if isinstance(scene, SlideScene):
+            scene.set_region_fill_opacity(opacity)
 
     def _on_marker_box_toggled(self, show: bool) -> None:
         scene = self._view.scene()

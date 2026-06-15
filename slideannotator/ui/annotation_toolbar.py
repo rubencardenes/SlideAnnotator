@@ -5,8 +5,10 @@ import math
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import (
+    QHBoxLayout,
     QLabel,
     QSizePolicy,
+    QSlider,
     QToolBar,
     QToolButton,
     QWidget,
@@ -522,6 +524,7 @@ class AnnotationToolbar(QToolBar):
     tool_changed = Signal(str)
     annotations_toggled = Signal(bool)
     marker_box_toggled = Signal(bool)
+    region_opacity_changed = Signal(float)
     save_requested = Signal()
     load_requested = Signal()
     summary_requested = Signal()
@@ -570,6 +573,34 @@ class AnnotationToolbar(QToolBar):
         self.addSeparator()
         self.addWidget(self._eye_btn)
         self.addWidget(self._box_btn)
+        self.addSeparator()
+
+        # Region fill-opacity slider
+        _DEFAULT_OPACITY = 16  # ≈ alpha 40/255 — matches current hardcoded default
+        opacity_widget = QWidget()
+        opacity_layout = QHBoxLayout(opacity_widget)
+        opacity_layout.setContentsMargins(4, 0, 4, 0)
+        opacity_layout.setSpacing(4)
+        opacity_lbl = QLabel("Fill:")
+        opacity_lbl.setStyleSheet("color: #aaa; font-size: 11px;")
+        self._region_opacity_slider = QSlider(Qt.Orientation.Horizontal)
+        self._region_opacity_slider.setRange(0, 100)
+        self._region_opacity_slider.setValue(_DEFAULT_OPACITY)
+        self._region_opacity_slider.setFixedWidth(80)
+        self._region_opacity_slider.setToolTip("Region fill opacity")
+        self._region_opacity_slider.setStyleSheet(
+            "QSlider::groove:horizontal { height: 4px; background: #444; border-radius: 2px; }"
+            "QSlider::handle:horizontal { width: 10px; height: 10px; margin: -3px 0; "
+            "background: #f90; border-radius: 5px; }"
+            "QSlider::sub-page:horizontal { background: #f90; border-radius: 2px; }"
+        )
+        self._region_opacity_val_lbl = QLabel(f"{_DEFAULT_OPACITY}%")
+        self._region_opacity_val_lbl.setStyleSheet("color: #888; font-size: 11px; min-width: 28px;")
+        self._region_opacity_slider.valueChanged.connect(self._on_region_opacity_slider)
+        opacity_layout.addWidget(opacity_lbl)
+        opacity_layout.addWidget(self._region_opacity_slider)
+        opacity_layout.addWidget(self._region_opacity_val_lbl)
+        self.addWidget(opacity_widget)
         self.addSeparator()
 
         self._channel_lbl = QLabel("Channel: —")
@@ -657,6 +688,10 @@ class AnnotationToolbar(QToolBar):
         self.addWidget(self._quit_btn)
 
         self._pan_btn.setChecked(True)
+
+    def _on_region_opacity_slider(self, value: int) -> None:
+        self._region_opacity_val_lbl.setText(f"{value}%")
+        self.region_opacity_changed.emit(value / 100.0)
 
     def _on_tool_clicked(self, name: str) -> None:
         for n, btn in self._tool_buttons.items():
