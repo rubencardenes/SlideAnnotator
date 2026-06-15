@@ -6,6 +6,7 @@ from PySide6.QtWidgets import QGraphicsPolygonItem, QGraphicsScene
 
 from ..annotations.models import AnnotationStore, CellMarker, FOVAnnotation, RegionAnnotation
 from ..compositing.compositor import ChannelSettings
+from ..settings import get_settings
 from ..tiles.tile_cache import TileKey
 from ..tiles.tile_manager import TileManager
 from .cell_det_cross_item import CellDetCrossItem
@@ -33,15 +34,16 @@ class SlideScene(QGraphicsScene):
         self._fov_items: dict[str, FOVItem] = {}
         self._stardist_items: list[QGraphicsPolygonItem] = []
         self._cell_det_items: list[CellDetCrossItem] = []
+        _s = get_settings()
         self._annotations_visible = True
         self._stardist_visible = True
-        self._stardist_color = QColor(0, 230, 180)
-        self._stardist_width = 2
+        self._stardist_color = QColor(*_s.outline_color)
+        self._stardist_width = _s.outline_thickness
         self._cell_det_visible = True
-        self._cell_det_color = QColor(255, 100, 80)
+        self._cell_det_color = QColor(*_s.detections_color)
         self._marker_show_box = False
 
-        self._region_fill_opacity: float = 40 / 255
+        self._region_fill_opacity: float = _s.region_opacity / 100.0
         self._active_channel: str = ""
 
         self._current_viewport: QRectF | None = None

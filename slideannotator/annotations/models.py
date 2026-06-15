@@ -126,8 +126,13 @@ class AnnotationStore(QObject):
         return r
 
     def add_fov(
-        self, cx: float, cy: float, w: float = 512.0, h: float = 512.0, channel: str = ""
+        self, cx: float, cy: float, w: float | None = None, h: float | None = None, channel: str = ""
     ) -> FOVAnnotation:
+        if w is None or h is None:
+            from ..settings import get_settings
+            fw, fh = get_settings().fov_size
+            w = float(fw) if w is None else w
+            h = float(fh) if h is None else h
         # cx, cy is the center; stored x,y is top-left
         f = FOVAnnotation.create(cx - w / 2, cy - h / 2, w, h, channel=channel)
         self._fovs[f.id] = f

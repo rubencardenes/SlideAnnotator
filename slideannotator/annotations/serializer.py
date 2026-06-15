@@ -263,6 +263,10 @@ def load_structured(output_dir: Path, slide_path: Path, store: AnnotationStore) 
     loaded_fovs: dict[tuple[int, int], str] = {}
     marker_count = 0
 
+    from ..settings import get_settings
+    fov_w, fov_h = get_settings().fov_size
+    fov_half_w, fov_half_h = fov_w / 2.0, fov_h / 2.0
+
     # Recover region-only FOVs from PNG filenames in Region Annotations/FOVs/.
     # Filename format: {stem}_{channel}_{x}_{y}.png — coordinates are the last two parts.
     # This mirrors how marker FOVs are recovered from txt file keys.
@@ -278,7 +282,7 @@ def load_structured(output_dir: Path, slide_path: Path, store: AnnotationStore) 
                 continue
             fov_key = (fov_x, fov_y)
             if fov_key not in loaded_fovs:
-                fov = store.add_fov(fov_x + 256.0, fov_y + 256.0)
+                fov = store.add_fov(fov_x + fov_half_w, fov_y + fov_half_h)
                 loaded_fovs[fov_key] = fov.id
 
     if marker_annot_dir.exists():
@@ -300,7 +304,7 @@ def load_structured(output_dir: Path, slide_path: Path, store: AnnotationStore) 
                     continue
                 fov_key = (fov_x, fov_y)
                 if fov_key not in loaded_fovs:
-                    fov = store.add_fov(fov_x + 256.0, fov_y + 256.0)
+                    fov = store.add_fov(fov_x + fov_half_w, fov_y + fov_half_h)
                     loaded_fovs[fov_key] = fov.id
                 for box_str in boxes_str.split():
                     parts = box_str.split(",")

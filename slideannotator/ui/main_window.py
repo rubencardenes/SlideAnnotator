@@ -615,8 +615,9 @@ class MainWindow(QMainWindow):
             return
         from PySide6.QtGui import QColor as _QColor
 
-        cur_color = self._stardist_outline_color or _QColor(0, 230, 180)
-        cur_width = self._stardist_outline_width or 2
+        _s = get_settings()
+        cur_color = self._stardist_outline_color or _QColor(*_s.outline_color)
+        cur_width = self._stardist_outline_width or _s.outline_thickness
         dlg = StarDistSettingsDialog(cur_color, cur_width, self)
         if dlg.exec():
             self._stardist_outline_color = dlg.selected_color

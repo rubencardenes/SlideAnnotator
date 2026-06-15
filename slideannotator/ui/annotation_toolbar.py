@@ -14,6 +14,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ..settings import get_settings
+
 _ICON_SZ = 26
 _BTN_SZ = 36
 
@@ -582,7 +584,7 @@ class AnnotationToolbar(QToolBar):
         self.addSeparator()
 
         # Region fill-opacity slider
-        _DEFAULT_OPACITY = 16  # ≈ alpha 40/255 — matches current hardcoded default
+        _DEFAULT_OPACITY = get_settings().region_opacity
         opacity_widget = QWidget()
         opacity_layout = QHBoxLayout(opacity_widget)
         opacity_layout.setContentsMargins(4, 0, 4, 0)
