@@ -158,6 +158,22 @@ def _normalize_channels(
     return np.stack(channels, axis=2)
 
 
+def _compute_auto_range(arr: np.ndarray) -> tuple[int, int, int, int, int, int]:
+    """Compute per-channel 1st/99th percentile range from a (H,W,3) uint16 array."""
+    result: list[int] = []
+    for c in range(3):
+        ch = arr[:, :, c]
+        if ch.max() == 0:
+            result.extend([0, 65535])
+        else:
+            p1 = int(np.percentile(ch, 1))
+            p99 = int(np.percentile(ch, 99))
+            if p99 <= p1:
+                p99 = min(p1 + 256, 65535)
+            result.extend([p1, p99])
+    return tuple(result)  # type: ignore[return-value]
+
+
 def _ndarray_to_qpixmap(arr: np.ndarray) -> QPixmap:
     """Convert an (H, W, 3) uint8 array to a QPixmap."""
     h, w = arr.shape[:2]
@@ -240,6 +256,16 @@ class _ChannelSliders(QGroupBox):
             vals.extend([lo.value(), hi.value()])
         return tuple(vals)  # type: ignore[return-value]
 
+    def set_values(self, r_min: int, r_max: int, g_min: int, g_max: int, b_min: int, b_max: int) -> None:
+        vals = [r_min, r_max, g_min, g_max, b_min, b_max]
+        for i, (lo, hi) in enumerate(self._sliders):
+            lo.blockSignals(True)
+            hi.blockSignals(True)
+            lo.setValue(vals[i * 2])
+            hi.setValue(vals[i * 2 + 1])
+            lo.blockSignals(False)
+            hi.blockSignals(False)
+
     def connect_all(self, slot) -> None:
         for lo, hi in self._sliders:
             lo.valueChanged.connect(slot)
@@ -265,6 +291,7 @@ class ReviewWindow(QDialog):
         self._filtered_fovs: list[FovEntry] = []
         self._current_index: int = 0
         self._annot_type: str = "Cell Marker Annotations"
+        self._needs_auto_range: bool = True
 
         self._build_ui()
         self._refresh_fovs()
@@ -418,6 +445,7 @@ class ReviewWindow(QDialog):
         checked = self._checked_channels()
         self._filtered_fovs = [e for e in self._all_fovs if e.channel in checked]
         self._current_index = 0
+        self._needs_auto_range = True
         self._show_current()
 
     # ------------------------------------------------------------------
@@ -455,6 +483,10 @@ class ReviewWindow(QDialog):
             )
             self._annot_label.setText("")
             return
+
+        if self._needs_auto_range:
+            self._sliders.set_values(*_compute_auto_range(arr))
+            self._needs_auto_range = False
 
         r_min, r_max, g_min, g_max, b_min, b_max = self._sliders.values()
         rgb8 = _normalize_channels(arr, r_min, r_max, g_min, g_max, b_min, b_max)
@@ -563,11 +595,13 @@ class ReviewWindow(QDialog):
     def _go_prev(self) -> None:
         if self._current_index > 0:
             self._current_index -= 1
+            self._needs_auto_range = True
             self._show_current()
 
     def _go_next(self) -> None:
         if self._current_index < len(self._filtered_fovs) - 1:
             self._current_index += 1
+            self._needs_auto_range = True
             self._show_current()
 
     # ------------------------------------------------------------------
