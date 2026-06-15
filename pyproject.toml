@@ -33,4 +33,14 @@ ignore = ["E501"]
 [dependency-groups]
 dev = [
     "ruff>=0.15.17",
+    "python-semantic-release>=9.0",
 ]
+
+[tool.semantic_release]
+version_toml = ["pyproject.toml:project.version"]
+branch = "main"
+changelog_file = "CHANGELOG.md"
+build_command = false
+upload_to_pypi = false
+upload_to_release = true
+tag_format = "v{version}"
