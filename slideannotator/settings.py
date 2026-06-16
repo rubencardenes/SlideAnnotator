@@ -67,6 +67,35 @@ def get_settings() -> Settings:
     return _cached
 
 
+def save_settings(s: Settings) -> None:
+    global _cached
+    data: dict = {
+        "annotations_dir": str(s.annotations_dir),
+        "db_path": str(s.db_path),
+        "fov_size": list(s.fov_size),
+        "outline_thickness": s.outline_thickness,
+        "outline_color": list(s.outline_color),
+        "region_opacity": s.region_opacity,
+        "detections_color": list(s.detections_color),
+    }
+    if s.stardist_model is not None:
+        data["stardist_model"] = str(s.stardist_model)
+    if s.cell_det_model is not None:
+        data["cell_det_model"] = str(s.cell_det_model)
+    if s.data_dir is not None:
+        data["data_dir"] = str(s.data_dir)
+
+    save_path = _SEARCH_PATHS[0]
+    for path in _SEARCH_PATHS:
+        if path.exists():
+            save_path = path
+            break
+
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+    save_path.write_text(yaml.dump(data, default_flow_style=False, sort_keys=False))
+    _cached = s
+
+
 def _load() -> Settings:
     for path in _SEARCH_PATHS:
         if path.exists():

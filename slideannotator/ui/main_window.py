@@ -28,7 +28,7 @@ from ..inference.CellONNXInference import CellONNXInferDFINE
 from ..inference.stardist import StarDistONNX
 from ..inference.stardist_worker import StarDistWorker
 from ..readers import open_slide
-from ..settings import get_settings
+from ..settings import get_settings, save_settings
 from ..tiles.tile_cache import LRUCache
 from ..tiles.tile_manager import TileManager
 from ..tools.cell_marker_tool import CellMarkerTool
@@ -42,7 +42,7 @@ from .image_list_panel import ImageListPanel
 from .image_properties_dialog import ImagePropertiesDialog
 from .marker_selection_dialog import MarkerSelectionDialog
 from .review_window import ReviewWindow
-from .stardist_settings_dialog import StarDistSettingsDialog
+from .stardist_settings_dialog import SettingsDialog
 from .summary_dialog import SummaryDialog
 
 
@@ -610,19 +610,18 @@ class MainWindow(QMainWindow):
             scene.set_stardist_visible(visible)
 
     def _show_stardist_settings(self) -> None:
-        scene = self._view.scene()
-        if not isinstance(scene, SlideScene):
-            return
         from PySide6.QtGui import QColor as _QColor
 
-        _s = get_settings()
-        cur_color = self._stardist_outline_color or _QColor(*_s.outline_color)
-        cur_width = self._stardist_outline_width or _s.outline_thickness
-        dlg = StarDistSettingsDialog(cur_color, cur_width, self)
+        dlg = SettingsDialog(get_settings(), self)
         if dlg.exec():
-            self._stardist_outline_color = dlg.selected_color
-            self._stardist_outline_width = dlg.selected_width
-            scene.set_stardist_style(self._stardist_outline_color, self._stardist_outline_width)
+            new_s = dlg.get_settings()
+            save_settings(new_s)
+            self._stardist_outline_color = _QColor(*new_s.outline_color)
+            self._stardist_outline_width = new_s.outline_thickness
+            scene = self._view.scene()
+            if isinstance(scene, SlideScene):
+                scene.set_stardist_style(self._stardist_outline_color, self._stardist_outline_width)
+                scene.set_region_fill_opacity(new_s.region_opacity / 100.0)
 
     # ------------------------------------------------------------------
     def _run_cell_det(self) -> None:

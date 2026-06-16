@@ -21,10 +21,10 @@ A desktop annotation tool for multiplex immunofluorescence (mIF) whole-slide ima
 - **Annotation visibility toggle** — press `Space` or click the eye button in the toolbar to show / hide all annotations instantly.
 - **Annotation persistence** — annotations are saved as JSON files in a configurable directory and can be reloaded with the toolbar load button or on the next session.
 - **View settings persistence** — per-image channel visibility, colour, and intensity range are saved automatically to `viewsettings.json` next to the slide and restored when reopening.
-- **Configurable settings** — `settings.yaml` at the project root (or `~/.config/slideannotator/settings.yaml`) controls application-level behaviour such as the annotations output directory.
+- **Configurable settings** — `settings.yaml` at the project root (or `~/.config/slideannotator/settings.yaml`) controls application-level behaviour. All settings can also be edited and saved at runtime via **StarDist → Settings**.
 - **Unsaved-changes guard** — prompts to save before opening a new image or quitting.
 - **Colorful icon toolbar** — tool buttons use crisp QPainter-drawn icons (pan, marker, region, select, eye, box-marker, save, load, quit) instead of text characters, avoiding platform emoji rendering issues.
-- **StarDist nucleus segmentation** — run StarDist (ONNX) inference on all FOVs in a background thread; detected cell outlines are overlaid on the slide. Toggle outline visibility with the toolbar button; customise outline colour and line width via **StarDist → Outline Settings**.
+- **StarDist nucleus segmentation** — run StarDist (ONNX) inference on all FOVs in a background thread; detected cell outlines are overlaid on the slide. Toggle outline visibility with the toolbar button; customise all application settings (paths, appearance, FOV size) via **StarDist → Settings**.
 - **DFINE cell detection** — run a DFINE ONNX object-detection model on all FOV tiles in a background thread. The active marker channel is mapped to red, DAPI/Hoechst to blue. Detected cells appear as zoom-invariant cross markers. Use the toolbar **Convert** button to turn detections into cell marker annotations.
 - **Image list panel** — a right-hand sidebar lists every slide image found under the configured `data_dir`. Each entry shows live annotation counts (markers / regions / FOVs) drawn from the SQLite database. Double-click any entry to open that slide.
 - **SQLite annotation database** — annotations are written to a SQLite database (WAL mode) in addition to JSON sidecars, enabling fast cross-slide queries and powering the image list panel counts.
@@ -110,6 +110,11 @@ annotations_dir: ~/data/annotations
 | `cell_det_model` | *(none)* | Path to the DFINE ONNX model file used for cell detection. |
 | `db_path` | `~/data/annotations/annotations.db` | Path to the SQLite annotation database. |
 | `data_dir` | *(none)* | Root directory scanned recursively for slide images shown in the image list panel. |
+| `fov_size` | `[512, 512]` | Width and height in pixels of FOV rectangles stamped with the `F` key. |
+| `outline_color` | `[0, 255, 0]` | RGB colour of StarDist nucleus outlines. |
+| `outline_thickness` | `3` | Line width in pixels of StarDist nucleus outlines. |
+| `region_opacity` | `50` | Default fill opacity (0–100 %) for region annotations. |
+| `detections_color` | `[255, 0, 0]` | RGB colour of DFINE cell-detection cross markers. |
 
 ## FOV image export
 
@@ -155,7 +160,7 @@ slideannotator/
 │   ├── channel_panel.py    # Per-channel controls
 │   ├── image_list_panel.py # Right sidebar: image list with annotation counts
 │   ├── summary_dialog.py   # Annotation summary dialog
-│   └── stardist_settings_dialog.py  # StarDist outline colour/width settings
+│   └── stardist_settings_dialog.py  # Full settings dialog (paths, appearance, FOV size)
 ├── readers/
 │   ├── base.py             # ImageReader ABC + OME-XML helpers
 │   ├── ome_tif.py          # ImageReaderOmeTif (pyvips)
