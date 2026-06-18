@@ -94,6 +94,7 @@ class MainWindow(QMainWindow):
         self._toolbar.save_requested.connect(self._save_to_db)
         self._toolbar.load_requested.connect(self._load_from_db)
         self._toolbar.summary_requested.connect(self._show_summary)
+        self._toolbar.image_properties_requested.connect(self._show_image_properties)
         self._toolbar.run_stardist_requested.connect(self._run_stardist)
         self._toolbar.stardist_toggled.connect(self._on_stardist_toggled)
         self._toolbar.run_cell_det_requested.connect(self._run_cell_det)

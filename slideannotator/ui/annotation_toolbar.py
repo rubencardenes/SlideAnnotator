@@ -238,6 +238,32 @@ def _icon_summary(size: int = _ICON_SZ) -> QIcon:
     return QIcon(pix)
 
 
+def _icon_image_properties(size: int = _ICON_SZ) -> QIcon:
+    pix = QPixmap(size, size)
+    pix.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pix)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    c = size / 2.0
+    color = QColor(100, 180, 255)
+    r = size * 0.40
+    # Circle outline
+    pen = QPen(color, size * 0.09)
+    p.setPen(pen)
+    p.setBrush(QColor(100, 180, 255, 30))
+    p.drawEllipse(QPointF(c, c), r, r)
+    # "i" — dot
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(color)
+    p.drawEllipse(QPointF(c, c - r * 0.42), size * 0.06, size * 0.06)
+    # "i" — stem
+    pen2 = QPen(color, size * 0.11)
+    pen2.setCapStyle(Qt.PenCapStyle.RoundCap)
+    p.setPen(pen2)
+    p.drawLine(QPointF(c, c - r * 0.15), QPointF(c, c + r * 0.48))
+    p.end()
+    return QIcon(pix)
+
+
 def _icon_cell_det_to_annot(size: int = _ICON_SZ) -> QIcon:
     """Cross → rectangle: convert detections to region annotations."""
     pix = QPixmap(size, size)
@@ -444,22 +470,23 @@ def _icon_undo(size: int = _ICON_SZ) -> QIcon:
     p = QPainter(pix)
     p.setRenderHint(QPainter.RenderHint.Antialiasing)
     color = QColor(255, 200, 60)
-    c, r = size / 2.0, size * 0.33
+    cx, cy = size / 2.0, size * 0.52
+    r = size * 0.30
     pen = QPen(color, size * 0.10)
     pen.setCapStyle(Qt.PenCapStyle.RoundCap)
     p.setPen(pen)
     p.setBrush(Qt.BrushStyle.NoBrush)
-    # CCW 270° arc: right → top → left → bottom; gap at lower-right
-    p.drawArc(QRectF(c - r, c - r, r * 2, r * 2), 0, int(270 * 16))
-    # Arrowhead at 270° (bottom), CCW tangent → pointing right
-    ax, ay = c, c + r
-    head = size * 0.14
+    # Right-side semicircle: bottom (270°) CCW 180° → top (90°)
+    p.drawArc(QRectF(cx - r, cy - r, r * 2, r * 2), int(270 * 16), int(180 * 16))
+    # Arrowhead at top (90°), CCW tangent = LEFTWARD
+    ax, ay = cx, cy - r
+    head = size * 0.21
     p.setPen(Qt.PenStyle.NoPen)
     p.setBrush(color)
     path = QPainterPath()
-    path.moveTo(ax + head, ay)
-    path.lineTo(ax, ay - head * 0.65)
-    path.lineTo(ax, ay + head * 0.65)
+    path.moveTo(ax - head * 0.85, ay)
+    path.lineTo(ax + head * 0.25, ay - head * 0.65)
+    path.lineTo(ax + head * 0.25, ay + head * 0.65)
     path.closeSubpath()
     p.drawPath(path)
     p.end()
@@ -472,22 +499,23 @@ def _icon_redo(size: int = _ICON_SZ) -> QIcon:
     p = QPainter(pix)
     p.setRenderHint(QPainter.RenderHint.Antialiasing)
     color = QColor(255, 200, 60)
-    c, r = size / 2.0, size * 0.33
+    cx, cy = size / 2.0, size * 0.52
+    r = size * 0.30
     pen = QPen(color, size * 0.10)
     pen.setCapStyle(Qt.PenCapStyle.RoundCap)
     p.setPen(pen)
     p.setBrush(Qt.BrushStyle.NoBrush)
-    # CW 270° arc: left → top → right → bottom; gap at lower-left
-    p.drawArc(QRectF(c - r, c - r, r * 2, r * 2), int(180 * 16), int(-270 * 16))
-    # Arrowhead at 270° (bottom), CW tangent → pointing left
-    ax, ay = c, c + r
-    head = size * 0.14
+    # Left-side semicircle: bottom (270°) CW 180° → top (90°)
+    p.drawArc(QRectF(cx - r, cy - r, r * 2, r * 2), int(270 * 16), int(-180 * 16))
+    # Arrowhead at top (90°), CW tangent = RIGHTWARD
+    ax, ay = cx, cy - r
+    head = size * 0.21
     p.setPen(Qt.PenStyle.NoPen)
     p.setBrush(color)
     path = QPainterPath()
-    path.moveTo(ax - head, ay)
-    path.lineTo(ax, ay - head * 0.65)
-    path.lineTo(ax, ay + head * 0.65)
+    path.moveTo(ax + head * 0.85, ay)
+    path.lineTo(ax - head * 0.25, ay - head * 0.65)
+    path.lineTo(ax - head * 0.25, ay + head * 0.65)
     path.closeSubpath()
     p.drawPath(path)
     p.end()
@@ -499,12 +527,14 @@ def _icon_quit(size: int = _ICON_SZ) -> QIcon:
     pix.fill(Qt.GlobalColor.transparent)
     p = QPainter(pix)
     p.setRenderHint(QPainter.RenderHint.Antialiasing)
-    pen = QPen(QColor(255, 75, 75), size * 0.17)
+    color = QColor(255, 75, 75)
+    c = size / 2.0
+    m = size * 0.22
+    pen = QPen(color, size * 0.13)
     pen.setCapStyle(Qt.PenCapStyle.RoundCap)
     p.setPen(pen)
-    m = size * 0.20
-    p.drawLine(QPointF(m, m), QPointF(size - m, size - m))
-    p.drawLine(QPointF(size - m, m), QPointF(m, size - m))
+    p.drawLine(QPointF(c - m, c - m), QPointF(c + m, c + m))
+    p.drawLine(QPointF(c + m, c - m), QPointF(c - m, c + m))
     p.end()
     return QIcon(pix)
 
@@ -532,6 +562,7 @@ class AnnotationToolbar(QToolBar):
     save_requested = Signal()
     load_requested = Signal()
     summary_requested = Signal()
+    image_properties_requested = Signal()
     run_stardist_requested = Signal()
     stardist_toggled = Signal(bool)
     run_cell_det_requested = Signal()
@@ -631,15 +662,21 @@ class AnnotationToolbar(QToolBar):
         self._save_btn = _make_tool_btn(_icon_save(), "Save Annotations", checkable=False)
         self._load_btn = _make_tool_btn(_icon_load(), "Load Annotations", checkable=False)
         self._summary_btn = _make_tool_btn(_icon_summary(), "Annotation Summary", checkable=False)
+        self._image_props_btn = _make_tool_btn(
+            _icon_image_properties(), "Image Properties [Ctrl+I]", checkable=False
+        )
         self._save_btn.setEnabled(False)
         self._load_btn.setEnabled(False)
-        self._summary_btn.setEnabled(False)
+        self._summary_btn.setEnabled(True)
+        self._image_props_btn.setEnabled(False)
         self._save_btn.clicked.connect(self.save_requested)
         self._load_btn.clicked.connect(self.load_requested)
         self._summary_btn.clicked.connect(self.summary_requested)
+        self._image_props_btn.clicked.connect(self.image_properties_requested)
         self.addWidget(self._save_btn)
         self.addWidget(self._load_btn)
         self.addWidget(self._summary_btn)
+        self.addWidget(self._image_props_btn)
 
         self.addSeparator()
         self._stardist_run_btn = _make_tool_btn(
@@ -649,18 +686,17 @@ class AnnotationToolbar(QToolBar):
             _icon_stardist_toggle(), "Toggle StarDist nuclei [orange eye]", checkable=True
         )
         self._stardist_settings_btn = _make_tool_btn(
-            _icon_stardist_settings(), "StarDist outline settings", checkable=False
+            _icon_stardist_settings(), "Settings", checkable=False
         )
         self._stardist_toggle_btn.setChecked(True)
         self._stardist_run_btn.setEnabled(False)
         self._stardist_toggle_btn.setEnabled(False)
-        self._stardist_settings_btn.setEnabled(False)
+        self._stardist_settings_btn.setEnabled(True)
         self._stardist_run_btn.clicked.connect(self.run_stardist_requested)
         self._stardist_toggle_btn.toggled.connect(self.stardist_toggled)
         self._stardist_settings_btn.clicked.connect(self.stardist_settings_requested)
         self.addWidget(self._stardist_run_btn)
         self.addWidget(self._stardist_toggle_btn)
-        self.addWidget(self._stardist_settings_btn)
 
         self.addSeparator()
         self._cell_det_run_btn = _make_tool_btn(
@@ -693,6 +729,7 @@ class AnnotationToolbar(QToolBar):
             "QToolButton:hover { background: #5a1515; border: 1px solid #f44; }"
         )
         self._quit_btn.clicked.connect(self.quit_requested)
+        self.addWidget(self._stardist_settings_btn)
         self.addWidget(self._quit_btn)
 
         self._pan_btn.setChecked(True)
@@ -713,10 +750,9 @@ class AnnotationToolbar(QToolBar):
     def set_save_load_enabled(self, enabled: bool) -> None:
         self._save_btn.setEnabled(enabled)
         self._load_btn.setEnabled(enabled)
-        self._summary_btn.setEnabled(enabled)
+        self._image_props_btn.setEnabled(enabled)
         self._stardist_run_btn.setEnabled(enabled)
         self._stardist_toggle_btn.setEnabled(enabled)
-        self._stardist_settings_btn.setEnabled(enabled)
         self._cell_det_run_btn.setEnabled(enabled)
         self._cell_det_toggle_btn.setEnabled(enabled)
 
