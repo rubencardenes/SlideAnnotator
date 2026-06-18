@@ -67,16 +67,22 @@ def get_settings() -> Settings:
     return _cached
 
 
+class _SettingsDumper(yaml.Dumper):
+    pass
+
+
+def _flow_list_representer(dumper: yaml.Dumper, data: list) -> yaml.Node:
+    return dumper.represent_sequence("tag:yaml.org,2002:seq", data, flow_style=True)
+
+
+_SettingsDumper.add_representer(list, _flow_list_representer)
+
+
 def save_settings(s: Settings) -> None:
     global _cached
     data: dict = {
         "annotations_dir": str(s.annotations_dir),
         "db_path": str(s.db_path),
-        "fov_size": list(s.fov_size),
-        "outline_thickness": s.outline_thickness,
-        "outline_color": list(s.outline_color),
-        "region_opacity": s.region_opacity,
-        "detections_color": list(s.detections_color),
     }
     if s.stardist_model is not None:
         data["stardist_model"] = str(s.stardist_model)
@@ -84,6 +90,15 @@ def save_settings(s: Settings) -> None:
         data["cell_det_model"] = str(s.cell_det_model)
     if s.data_dir is not None:
         data["data_dir"] = str(s.data_dir)
+    data.update(
+        {
+            "fov_size": list(s.fov_size),
+            "outline_thickness": s.outline_thickness,
+            "outline_color": list(s.outline_color),
+            "region_opacity": s.region_opacity,
+            "detections_color": list(s.detections_color),
+        }
+    )
 
     save_path = _SEARCH_PATHS[0]
     for path in _SEARCH_PATHS:
@@ -92,7 +107,9 @@ def save_settings(s: Settings) -> None:
             break
 
     save_path.parent.mkdir(parents=True, exist_ok=True)
-    save_path.write_text(yaml.dump(data, default_flow_style=False, sort_keys=False))
+    save_path.write_text(
+        yaml.dump(data, Dumper=_SettingsDumper, default_flow_style=False, sort_keys=False)
+    )
     _cached = s
 
 
