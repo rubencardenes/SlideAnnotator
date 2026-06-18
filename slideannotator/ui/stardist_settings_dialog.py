@@ -97,18 +97,27 @@ class SettingsDialog(QDialog):
             form, "Annotations dir:", str(self._settings.annotations_dir), is_dir=True
         )
         self._db_path = self._path_row(
-            form, "Database path:", str(self._settings.db_path), is_dir=False,
+            form,
+            "Database path:",
+            str(self._settings.db_path),
+            is_dir=False,
             file_filter="Database files (*.db *.sqlite)",
         )
         self._data_dir = self._path_row(
             form, "Data dir:", str(self._settings.data_dir or ""), is_dir=True
         )
         self._stardist_model_edit = self._path_row(
-            form, "StarDist model:", str(self._settings.stardist_model or ""), is_dir=False,
+            form,
+            "StarDist model:",
+            str(self._settings.stardist_model or ""),
+            is_dir=False,
             file_filter="ONNX models (*.onnx)",
         )
         self._cell_det_model_edit = self._path_row(
-            form, "Cell detection model:", str(self._settings.cell_det_model or ""), is_dir=False,
+            form,
+            "Cell detection model:",
+            str(self._settings.cell_det_model or ""),
+            is_dir=False,
             file_filter="ONNX models (*.onnx)",
         )
         return box
@@ -258,7 +267,9 @@ class SettingsDialog(QDialog):
         s = Settings()
 
         ann_text = self._annotations_dir.text().strip()
-        s.annotations_dir = Path(ann_text).expanduser() if ann_text else self._settings.annotations_dir
+        s.annotations_dir = (
+            Path(ann_text).expanduser() if ann_text else self._settings.annotations_dir
+        )
 
         db_text = self._db_path.text().strip()
         s.db_path = Path(db_text).expanduser() if db_text else self._settings.db_path
@@ -272,10 +283,18 @@ class SettingsDialog(QDialog):
         cd_text = self._cell_det_model_edit.text().strip()
         s.cell_det_model = Path(cd_text).expanduser() if cd_text else None
 
-        s.outline_color = (self._outline_color.red(), self._outline_color.green(), self._outline_color.blue())
+        s.outline_color = (
+            self._outline_color.red(),
+            self._outline_color.green(),
+            self._outline_color.blue(),
+        )
         s.outline_thickness = self._outline_thickness.value()
         s.region_opacity = self._region_opacity.value()
-        s.detections_color = (self._detections_color.red(), self._detections_color.green(), self._detections_color.blue())
+        s.detections_color = (
+            self._detections_color.red(),
+            self._detections_color.green(),
+            self._detections_color.blue(),
+        )
         s.fov_size = (self._fov_width.value(), self._fov_height.value())
 
         return s
