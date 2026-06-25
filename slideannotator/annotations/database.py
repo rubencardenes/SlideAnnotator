@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from .models import AnnotationStore, CellMarker, FOVAnnotation, RegionAnnotation
@@ -64,7 +64,7 @@ class AnnotationDB:
     # ------------------------------------------------------------------
     def save_all(self, store: AnnotationStore, slide_name: str) -> int:
         """Replace all annotations for *slide_name* with the current store contents."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         cur = self._conn.cursor()
         cur.execute("DELETE FROM annotations WHERE slide_name = ?", (slide_name,))
         count = 0

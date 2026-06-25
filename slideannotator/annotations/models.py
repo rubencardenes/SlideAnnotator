@@ -3,7 +3,7 @@ from __future__ import annotations
 import getpass
 import uuid
 from dataclasses import dataclass, field, replace
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from PySide6.QtCore import QObject, Signal
 
@@ -11,7 +11,7 @@ MARKER_BOX_HALF = 10  # half-side of the bounding box saved in txt export (scene
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _current_user() -> str:
