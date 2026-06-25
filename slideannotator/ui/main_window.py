@@ -36,6 +36,7 @@ from ..tools.pan_tool import PanTool
 from ..tools.region_tool import RegionTool
 from ..tools.select_tool import SelectTool
 from ..viewsettings import load_view_settings, save_view_settings
+from .agent_panel import AgentPanel
 from .annotation_toolbar import AnnotationToolbar
 from .channel_panel import ChannelPanel
 from .image_list_panel import ImageListPanel
@@ -132,7 +133,10 @@ class MainWindow(QMainWindow):
         splitter.addWidget(self._view)
         splitter.addWidget(self._channel_panel)
         splitter.setSizes([230, 940, 230])
-        layout.addWidget(splitter)
+        layout.addWidget(splitter, 1)
+
+        self._agent_panel = AgentPanel()
+        layout.addWidget(self._agent_panel)
 
         self._image_list_panel.refresh()
 
@@ -758,6 +762,7 @@ class MainWindow(QMainWindow):
         # Cancel queued tile jobs and wait for active ones to finish
         self._thread_pool.clear()
         self._thread_pool.waitForDone(3000)
+        self._agent_panel.shutdown()
         if self._reader:
             self._reader.close()
         if self._db:

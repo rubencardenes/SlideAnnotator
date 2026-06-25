@@ -3,7 +3,7 @@ name = "slideannotator"
 version = "1.1.0"
 description = "Histological slide annotation tool for mIF images"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 dependencies = [
     "PySide6>=6.6.0",
     "pyvips>=2.2.0",
@@ -14,6 +14,8 @@ dependencies = [
     "loguru>=0.7.3",
     "pylibczirw>=6.0.1",
     "pillow>=10.0",
+    "matplotlib>=3.9",
+    "dbagenticquery",
 ]
 
 [project.scripts]
@@ -23,9 +25,12 @@ slideannotator = "slideannotator.app:main"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.uv.sources]
+dbagenticquery = { path = "../DBAgenticQuery", editable = true }
+
 [tool.ruff]
 line-length = 100
-target-version = "py310"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP"]

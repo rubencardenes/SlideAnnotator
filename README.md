@@ -29,6 +29,8 @@ A desktop annotation tool for multiplex immunofluorescence (mIF) whole-slide ima
 - **Image list panel** — a right-hand sidebar lists every slide image found under the configured `data_dir`. Each entry shows live annotation counts (markers / regions / FOVs) drawn from the SQLite database. Double-click any entry to open that slide.
 - **SQLite annotation database** — annotations are written to a SQLite database (WAL mode) in addition to JSON sidecars, enabling fast cross-slide queries and powering the image list panel counts.
 - **Annotation summary** — **Summary** toolbar button opens a dialog showing, across all annotation files in the configured directory, the total count of cell markers, regions, and FOVs grouped by slide and channel.
+- **Image properties** — toolbar button / **File → Image Properties…** (`Ctrl+I`) shows metadata for the currently open slide (dimensions, pyramid levels, channels, etc.).
+- **AI query panel** — ask questions about the annotation database in plain language from the bottom panel (e.g. "How many annotations are there?" or "Plot annotations per biomarker"). Backed by `dbagenticquery`, a read-only text-to-SQL agent that runs against the SQLite annotation database. The results panel (questions, SQL, answers) is hidden by default and only appears once a question is asked; use the **Show/Hide** button to toggle it manually. Charts are opened in their own pop-up window rather than embedded in the panel.
 
 ## Supported file formats
 
@@ -43,13 +45,15 @@ A desktop annotation tool for multiplex immunofluorescence (mIF) whole-slide ima
 
 ## Requirements
 
-- Python ≥ 3.10
+- Python ≥ 3.12
 - [PySide6](https://pypi.org/project/PySide6/) ≥ 6.6
 - [pyvips](https://pypi.org/project/pyvips/) ≥ 2.2 (requires libvips ≥ 8.9 for SubIFD pyramid support)
 - [numpy](https://pypi.org/project/numpy/) ≥ 1.26
 - [PyYAML](https://pypi.org/project/PyYAML/) ≥ 6.0
 - [h5py](https://pypi.org/project/h5py/) ≥ 3.0 (required for Imaris `.ims` files)
 - [onnxruntime](https://pypi.org/project/onnxruntime/) ≥ 1.17 (required for StarDist inference)
+- [matplotlib](https://pypi.org/project/matplotlib/) ≥ 3.9 (chart rendering for the AI query panel)
+- `dbagenticquery` (text-to-SQL agent powering the AI query panel; requires an LLM API key, see its own `.env` configuration)
 
 ## Installation
 
@@ -84,6 +88,7 @@ Open an image with **File → Open Image** (`Ctrl+O`).
 | `Ctrl+O` | Open image |
 | `Ctrl+S` | Save annotations |
 | `Ctrl+E` | Export cell markers to txt |
+| `Ctrl+I` | Show image properties |
 | `Ctrl+Q` | Quit |
 | `Space` | Toggle annotation visibility |
 | `B` | Toggle markers between dot and bounding-box display |
@@ -160,6 +165,10 @@ slideannotator/
 │   ├── channel_panel.py    # Per-channel controls
 │   ├── image_list_panel.py # Right sidebar: image list with annotation counts
 │   ├── summary_dialog.py   # Annotation summary dialog
+│   ├── image_properties_dialog.py  # Slide metadata dialog
+│   ├── agent_panel.py      # Bottom panel: natural-language queries over the annotation DB
+│   ├── widgets/
+│   │   └── chart_canvas.py # Matplotlib canvas + pop-up chart window
 │   └── stardist_settings_dialog.py  # Full settings dialog (paths, appearance, FOV size)
 ├── readers/
 │   ├── base.py             # ImageReader ABC + OME-XML helpers
@@ -193,6 +202,8 @@ slideannotator/
 │   ├── cell_marker_tool.py
 │   ├── region_tool.py
 │   └── select_tool.py
+├── workers/
+│   └── agent_worker.py     # QThread running DBAgenticQuery questions in the background
 └── utils/
     └── colors.py           # Default channel colour assignment
 ```
