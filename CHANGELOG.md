@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.3.0 (2026-06-26)
+
+### Code Style
+
+- Fixed linting
+  ([`71a4e02`](https://github.com/rubencardenes/SlideAnnotator/commit/71a4e0260b7482d255e64124873d05a4a078cad6))
+
+### Continuous Integration
+
+- Fixed dependency from DBAgentquery
+  ([`7f543d2`](https://github.com/rubencardenes/SlideAnnotator/commit/7f543d2175881d5a5c9de36b8af0121acf948ebc))
+
+
 ## v1.2.0 (2026-06-18)
 
 ### Code Style
