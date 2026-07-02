@@ -326,10 +326,13 @@ class MainWindow(QMainWindow):
     def _export_cell_marker_annot(self) -> None:
         db = self._get_db()
         channels = db.get_distinct_channels("cell_marker")
-        dlg = MarkerSelectionDialog(channels, title="Select Markers to Export", parent=self)
+        dlg = MarkerSelectionDialog(
+            channels, title="Select Markers to Export", parent=self, show_format_choice=True
+        )
         if dlg.exec() != MarkerSelectionDialog.DialogCode.Accepted:
             return
         selected = set(dlg.selected_channels())
+        export_format = dlg.export_format()
 
         output_dir = get_settings().annotations_dir
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -356,13 +359,17 @@ class MainWindow(QMainWindow):
                     temp_store,
                     reader,
                     selected_channels=selected,
+                    export_format=export_format,
                 )
             finally:
                 if opened and reader is not None:
                     reader.close()
             saved += s
             errors += e
-        msg = f"Exported to:\n{output_dir / 'Cell Marker Annotations'}\n\n{saved} file(s) written."
+        msg = (
+            f"Exported ({export_format.upper()}) to:\n"
+            f"{output_dir / 'Cell Marker Annotations'}\n\n{saved} file(s) written."
+        )
         if errors:
             msg += f"\n({errors} error(s))"
         QMessageBox.information(self, "Cell Marker Annotations Exported", msg)

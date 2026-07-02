@@ -83,13 +83,29 @@ def export_cell_marker_annot(
     store: AnnotationStore,
     reader: Any | None = None,
     selected_channels: set[str] | None = None,
+    export_format: str = "yolo",
 ) -> tuple[int, int]:
     """Export cell marker annotations to 'Cell Marker Annotations' directory.
 
-    Writes per-channel txt files to Annot/ and, when reader is provided, FOV
-    images to FOVs/.  Returns (saved_count, error_count).
-    When *selected_channels* is provided only those channels are exported.
+    Writes FOV images to FOVs/ (when *reader* is provided) and annotation
+    files to Annot/, in either "yolo" or "coco" *export_format*.  Returns
+    (saved_count, error_count). When *selected_channels* is provided only
+    those channels are exported.
     """
+    if export_format == "coco":
+        return _export_cell_marker_annot_coco(
+            output_dir, slide_name, store, reader, selected_channels
+        )
+    return _export_cell_marker_annot_yolo(output_dir, slide_name, store, reader, selected_channels)
+
+
+def _export_cell_marker_annot_yolo(
+    output_dir: Path,
+    slide_name: str,
+    store: AnnotationStore,
+    reader: Any | None = None,
+    selected_channels: set[str] | None = None,
+) -> tuple[int, int]:
     stem = slide_name
     annot_dir = output_dir / "Cell Marker Annotations" / "Annot"
     fovs_dir = output_dir / "Cell Marker Annotations" / "FOVs"
@@ -147,6 +163,105 @@ def export_cell_marker_annot(
             txt_path = annot_dir / f"{stem}_{channel}.txt"
             txt_path.write_text("\n".join(lines) + "\n")
             saved += 1
+
+    return saved, errors
+
+
+def _export_cell_marker_annot_coco(
+    output_dir: Path,
+    slide_name: str,
+    store: AnnotationStore,
+    reader: Any | None = None,
+    selected_channels: set[str] | None = None,
+) -> tuple[int, int]:
+    """Write one COCO-format instances JSON (plus FOV images) per slide."""
+    stem = slide_name
+    annot_dir = output_dir / "Cell Marker Annotations" / "Annot"
+    fovs_dir = output_dir / "Cell Marker Annotations" / "FOVs"
+    for d in (annot_dir, fovs_dir):
+        d.mkdir(parents=True, exist_ok=True)
+
+    ch_index: dict[str, int] = (
+        {ch.name: i for i, ch in enumerate(reader.channels)} if reader else {}
+    )
+    dapi_ch_idx = _find_dapi_channel(reader) if reader else None
+    saved = errors = 0
+
+    marker_channels = {m.channel for m in store.markers.values()}
+    if selected_channels is not None:
+        marker_channels = marker_channels & selected_channels
+
+    categories = [{"id": i + 1, "name": channel} for i, channel in enumerate(sorted(marker_channels))]
+    category_id_by_name = {c["name"]: c["id"] for c in categories}
+
+    images: list[dict] = []
+    annotations: list[dict] = []
+    next_image_id = 1
+    next_ann_id = 1
+    box_size = 2 * MARKER_BOX_HALF
+
+    for channel in sorted(marker_channels):
+        ch_idx = ch_index.get(channel)
+
+        for fov in store.fovs.values():
+            fx1, fy1 = fov.x, fov.y
+            fx2, fy2 = fov.x + fov.w, fov.y + fov.h
+            fov_markers = [
+                m
+                for m in store.markers.values()
+                if m.channel == channel and fx1 <= m.x <= fx2 and fy1 <= m.y <= fy2
+            ]
+            if not fov_markers:
+                continue
+
+            file_name = f"{stem}_{channel}_{int(round(fov.x))}_{int(round(fov.y))}.png"
+            image_id = next_image_id
+            next_image_id += 1
+            images.append(
+                {
+                    "id": image_id,
+                    "file_name": file_name,
+                    "width": int(fov.w),
+                    "height": int(fov.h),
+                }
+            )
+
+            for m in fov_markers:
+                bx1 = m.x - MARKER_BOX_HALF - fx1
+                by1 = m.y - MARKER_BOX_HALF - fy1
+                annotations.append(
+                    {
+                        "id": next_ann_id,
+                        "image_id": image_id,
+                        "category_id": category_id_by_name[channel],
+                        "bbox": [round(bx1, 2), round(by1, 2), box_size, box_size],
+                        "area": box_size * box_size,
+                        "iscrowd": 0,
+                    }
+                )
+                next_ann_id += 1
+
+            if reader and ch_idx is not None:
+                fov_path = fovs_dir / file_name
+                if not fov_path.exists():
+                    ok = _save_fov_rgb16(
+                        fov_path,
+                        reader,
+                        ch_idx,
+                        dapi_ch_idx,
+                        int(fov.x),
+                        int(fov.y),
+                        int(fov.w),
+                        int(fov.h),
+                    )
+                    saved += ok
+                    errors += not ok
+
+    if annotations:
+        coco_data = {"images": images, "annotations": annotations, "categories": categories}
+        json_path = annot_dir / f"{stem}_coco.json"
+        json_path.write_text(json.dumps(coco_data, indent=2))
+        saved += 1
 
     return saved, errors
 

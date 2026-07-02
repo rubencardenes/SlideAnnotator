@@ -2,11 +2,14 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QButtonGroup,
     QCheckBox,
     QDialog,
     QDialogButtonBox,
     QFrame,
+    QHBoxLayout,
     QLabel,
+    QRadioButton,
     QScrollArea,
     QVBoxLayout,
     QWidget,
@@ -16,7 +19,13 @@ from PySide6.QtWidgets import (
 class MarkerSelectionDialog(QDialog):
     """Popup to select which markers (channels) to include in an export."""
 
-    def __init__(self, channels: list[str], title: str = "Select Markers", parent=None) -> None:
+    def __init__(
+        self,
+        channels: list[str],
+        title: str = "Select Markers",
+        parent=None,
+        show_format_choice: bool = False,
+    ) -> None:
         super().__init__(parent)
         self.setWindowTitle(title)
         self.setMinimumWidth(320)
@@ -82,6 +91,27 @@ class MarkerSelectionDialog(QDialog):
             scroll.setMaximumHeight(max_visible * row_height + 8)
             layout.addWidget(scroll)
 
+        self._yolo_radio: QRadioButton | None = None
+        self._coco_radio: QRadioButton | None = None
+        if show_format_choice:
+            sep2 = QFrame()
+            sep2.setFrameShape(QFrame.Shape.HLine)
+            sep2.setStyleSheet("color: #3a3a3a;")
+            layout.addWidget(sep2)
+
+            layout.addWidget(QLabel("Export format:"))
+            format_row = QHBoxLayout()
+            self._yolo_radio = QRadioButton("YOLO")
+            self._coco_radio = QRadioButton("COCO")
+            self._yolo_radio.setChecked(True)
+            format_group = QButtonGroup(self)
+            format_group.addButton(self._yolo_radio)
+            format_group.addButton(self._coco_radio)
+            format_row.addWidget(self._yolo_radio)
+            format_row.addWidget(self._coco_radio)
+            format_row.addStretch()
+            layout.addLayout(format_row)
+
         btns = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel
         )
@@ -91,6 +121,11 @@ class MarkerSelectionDialog(QDialog):
 
     def selected_channels(self) -> list[str]:
         return [ch for ch, cb in self._channel_checkboxes.items() if cb.isChecked()]
+
+    def export_format(self) -> str:
+        if self._coco_radio is not None and self._coco_radio.isChecked():
+            return "coco"
+        return "yolo"
 
     def _on_select_all_changed(self, state: int) -> None:
         checked = state == Qt.CheckState.Checked.value
