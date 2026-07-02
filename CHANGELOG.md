@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.4.0 (2026-07-02)
+
+### Features
+
+- **serializer**: Adding feature to export annotations in COCO format
+  ([`c980e54`](https://github.com/rubencardenes/SlideAnnotator/commit/c980e54834a3dff9bb29369211ebc0a242ae0a56))
+
+
 ## v1.3.0 (2026-06-26)
 
 ### Code Style
