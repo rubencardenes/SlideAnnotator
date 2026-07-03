@@ -18,6 +18,7 @@ class _Signals(QObject):
     finished = Signal(
         list
     )  # list[tuple[float, float, float, float]]  — scene-space (xmin,ymin,xmax,ymax)
+    progress = Signal(int, int)  # (fovs_done, fovs_total)
     error = Signal(str)
 
 
@@ -68,7 +69,8 @@ class CellDetWorker(QRunnable):
     def run(self) -> None:
         try:
             all_boxes: list[tuple[float, float, float, float]] = []
-            for fov in self._fovs:
+            total = len(self._fovs)
+            for i, fov in enumerate(self._fovs):
                 ox, oy = int(fov.x), int(fov.y)
                 fw, fh = int(fov.w), int(fov.h)
                 raw = self._reader.read_region(0, ox, oy, fw, fh)  # (C, H, W)
@@ -83,6 +85,8 @@ class CellDetWorker(QRunnable):
                             xmax = float(row[2]) + ox + tx
                             ymax = float(row[3]) + oy + ty
                             all_boxes.append((xmin, ymin, xmax, ymax))
+
+                self.signals.progress.emit(i + 1, total)
 
             self.signals.finished.emit(all_boxes)
         except Exception as exc:

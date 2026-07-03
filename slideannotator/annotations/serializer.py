@@ -191,7 +191,9 @@ def _export_cell_marker_annot_coco(
     if selected_channels is not None:
         marker_channels = marker_channels & selected_channels
 
-    categories = [{"id": i + 1, "name": channel} for i, channel in enumerate(sorted(marker_channels))]
+    categories = [
+        {"id": i + 1, "name": channel} for i, channel in enumerate(sorted(marker_channels))
+    ]
     category_id_by_name = {c["name"]: c["id"] for c in categories}
 
     images: list[dict] = []

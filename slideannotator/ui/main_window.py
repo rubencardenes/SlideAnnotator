@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QMainWindow,
     QMessageBox,
+    QProgressBar,
     QSplitter,
     QVBoxLayout,
     QWidget,
@@ -137,6 +138,18 @@ class MainWindow(QMainWindow):
 
         self._agent_panel = AgentPanel()
         layout.addWidget(self._agent_panel)
+
+        self._progress_bar = QProgressBar()
+        self._progress_bar.setTextVisible(False)
+        self._progress_bar.setMaximumHeight(12)
+        self._progress_bar.setStyleSheet(
+            "QProgressBar { background: #1a1a1a; border: none; }"
+            "QProgressBar::chunk { background-color: #2ecc71; }"
+        )
+        self._progress_bar.setVisible(False)
+        self.statusBar().setStyleSheet("background: #161616; border: none;")
+        self.statusBar().setContentsMargins(0, 0, 0, 0)
+        self.statusBar().addPermanentWidget(self._progress_bar, 1)
 
         self._image_list_panel.refresh()
 
@@ -698,25 +711,34 @@ class MainWindow(QMainWindow):
         channel_b = dapi_idx  # tile[2] = DAPI    (blue channel)
 
         self._toolbar.set_cell_det_running(True)
+        self._progress_bar.setValue(0)
+        self._progress_bar.setMaximum(len(fovs))
+        self._progress_bar.setVisible(True)
         worker = CellDetWorker(
             self._cell_det_model, fovs, self._reader, channel_r, channel_g, channel_b
         )
+        worker.signals.progress.connect(self._on_cell_det_progress)
         worker.signals.finished.connect(self._on_cell_det_finished)
         worker.signals.error.connect(self._on_cell_det_error)
         self._thread_pool.start(worker)
 
+    def _on_cell_det_progress(self, done: int, total: int) -> None:
+        self._progress_bar.setMaximum(total)
+        self._progress_bar.setValue(done)
+
     def _on_cell_det_finished(self, boxes: list) -> None:
         self._toolbar.set_cell_det_running(False)
+        self._progress_bar.setVisible(False)
         self._cell_det_boxes = boxes
         centers = [((x0 + x1) / 2.0, (y0 + y1) / 2.0) for x0, y0, x1, y1 in boxes]
         scene = self._view.scene()
         if isinstance(scene, SlideScene):
             scene.set_cell_det_points(centers)
         self._toolbar.set_cell_det_convert_enabled(bool(boxes))
-        QMessageBox.information(self, "Detection Complete", f"Detected {len(boxes)} cell(s).")
 
     def _on_cell_det_error(self, msg: str) -> None:
         self._toolbar.set_cell_det_running(False)
+        self._progress_bar.setVisible(False)
         QMessageBox.critical(self, "Detection Error", msg)
 
     def _on_cell_det_toggled(self, visible: bool) -> None:
@@ -739,9 +761,6 @@ class MainWindow(QMainWindow):
         ]
         self._store.add_marker_batch(markers_data)
         self._update_undo_redo_state()
-        QMessageBox.information(
-            self, "Annotations Created", f"Created {len(markers_data)} cell marker annotation(s)."
-        )
 
     # ------------------------------------------------------------------
     def _prompt_save(self) -> bool:
