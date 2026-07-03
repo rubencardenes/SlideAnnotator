@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.5.0 (2026-07-03)
+
+### Bug Fixes
+
+- **colors**: Cycle fallback channel colors instead of repeating gray
+  ([`7522f50`](https://github.com/rubencardenes/SlideAnnotator/commit/7522f505108f34ca3b98b73bbf15684fdb13d5ff))
+
+### Features
+
+- Added progress bar fixed channel colors
+  ([`3a5e91e`](https://github.com/rubencardenes/SlideAnnotator/commit/3a5e91efaf602a88603025081662419a8ac1decb))
+
+
 ## v1.4.0 (2026-07-02)
 
 ### Features
