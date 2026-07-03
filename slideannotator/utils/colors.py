@@ -27,15 +27,14 @@ _FALLBACK_COLORS: list[tuple[int, int, int]] = [
     (128, 255, 0),
     (255, 200, 0),
     (100, 100, 255),
+    (0, 128, 128),
+    (255, 255, 255),
 ]
 
 
-def assign_channel_color(name: str, used_colors: set[tuple[int, int, int]]) -> tuple[int, int, int]:
+def assign_channel_color(name: str, index: int) -> tuple[int, int, int]:
     key = name.lower().replace(" ", "").replace("-", "").replace("_", "")
     for pattern, color in CHANNEL_COLORS.items():
         if pattern in key or key.startswith(pattern):
             return color
-    for color in _FALLBACK_COLORS:
-        if color not in used_colors:
-            return color
-    return (200, 200, 200)
+    return _FALLBACK_COLORS[index % len(_FALLBACK_COLORS)]

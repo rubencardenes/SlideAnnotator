@@ -39,12 +39,10 @@ class CziSlideReader(ImageReaderCzi):
 
         raw_names: list[str] = meta.get("channel_names", [])
         n_channels: int = meta["num_channels"]
-        used_colors: set[tuple[int, int, int]] = set()
         self.channels: list[ChannelInfo] = []
         for i in range(n_channels):
             label = (raw_names[i].strip() if i < len(raw_names) else "") or f"Ch{i}"
-            color = assign_channel_color(label, used_colors)
-            used_colors.add(color)
+            color = assign_channel_color(label, i)
             self.channels.append(ChannelInfo(index=i, name=label, color=color))
 
         try:
