@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.5.1 (2026-07-05)
+
+### Bug Fixes
+
+- **inference**: Lazily import the stardist2d C extension
+  ([`df5dc9d`](https://github.com/rubencardenes/SlideAnnotator/commit/df5dc9dbb9f411d81c270c63f1ef3531a5d56c1b))
+
+### Continuous Integration
+
+- Add pytest smoke tests and harden CI/CD pipeline
+  ([`66cbf7b`](https://github.com/rubencardenes/SlideAnnotator/commit/66cbf7b538943b0d1b5734ec8e257c59cf08bcb0))
+
+
 ## v1.5.0 (2026-07-03)
 
 ### Bug Fixes
