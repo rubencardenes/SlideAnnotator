@@ -2,8 +2,6 @@ from time import time
 
 import numpy as np
 
-from .lib.stardist2d import c_non_max_suppression_inds
-
 
 def _raise(e):
     if isinstance(e, BaseException):
@@ -212,6 +210,7 @@ def non_maximum_suppression_inds(
 
     returns indices of selected polygons
     """
+    from .lib.stardist2d import c_non_max_suppression_inds
 
     assert dist.ndim == 2
     assert points.ndim == 2
