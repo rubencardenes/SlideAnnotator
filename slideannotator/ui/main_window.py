@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..annotations.database import AnnotationDB
+from ..annotations.eval_database import EvaluationDB
 from ..annotations.models import AnnotationStore
 from ..annotations.serializer import (
     export_cell_marker_annot,
@@ -26,6 +27,7 @@ from ..graphics.slide_scene import SlideScene
 from ..graphics.slide_view import SlideView
 from ..inference.cell_det_worker import CellDetWorker
 from ..inference.CellONNXInference import CellONNXInferDFINE
+from ..inference.eval_worker import EvaluationWorker, FovGT, SlideEvalJob
 from ..inference.stardist import StarDistONNX
 from ..inference.stardist_worker import StarDistWorker
 from ..readers import open_slide
@@ -40,6 +42,8 @@ from ..viewsettings import load_view_settings, save_view_settings
 from .agent_panel import AgentPanel
 from .annotation_toolbar import AnnotationToolbar
 from .channel_panel import ChannelPanel
+from .evaluation_dialog import EvaluationResultsDialog, EvaluationSelectionDialog
+from .evaluations_table_dialog import EvaluationsTableDialog
 from .image_list_panel import ImageListPanel
 from .image_properties_dialog import ImagePropertiesDialog
 from .marker_selection_dialog import MarkerSelectionDialog
@@ -69,6 +73,7 @@ class MainWindow(QMainWindow):
         self._cell_det_model: CellONNXInferDFINE | None = None
         self._cell_det_boxes: list[tuple[float, float, float, float]] = []
         self._db: AnnotationDB | None = None
+        self._eval_db: EvaluationDB | None = None
 
         self._thread_pool = QThreadPool.globalInstance()
         self._thread_pool.setMaxThreadCount(4)
@@ -203,6 +208,12 @@ class MainWindow(QMainWindow):
         self._review_action = file_menu.addAction("Re&view Annotations…")
         self._review_action.setShortcut("Ctrl+R")
         self._review_action.triggered.connect(self._show_review_window)
+
+        self._evaluate_action = file_menu.addAction("E&valuate…")
+        self._evaluate_action.triggered.connect(self._show_evaluate)
+
+        self._show_evaluations_action = file_menu.addAction("Sho&w Evaluations…")
+        self._show_evaluations_action.triggered.connect(self._show_evaluations)
 
         file_menu.addSeparator()
         quit_action = file_menu.addAction("&Quit")
@@ -397,6 +408,11 @@ class MainWindow(QMainWindow):
             self._db = AnnotationDB(get_settings().db_path)
         return self._db
 
+    def _get_eval_db(self) -> EvaluationDB:
+        if self._eval_db is None:
+            self._eval_db = EvaluationDB(get_settings().resolved_eval_db_path())
+        return self._eval_db
+
     def _save_to_db(self) -> None:
         if self._store is None or self._slide_path is None:
             return
@@ -488,6 +504,146 @@ class MainWindow(QMainWindow):
     def _show_review_window(self) -> None:
         dlg = ReviewWindow(parent=self)
         dlg.exec()
+
+    # ------------------------------------------------------------------
+    # Model evaluation
+    def _show_evaluate(self) -> None:
+        db = self._get_db()
+        markers = db.get_distinct_channels("cell_marker")
+        slide_paths = db.get_slide_paths()
+        images = list(slide_paths.keys())
+        if not markers or not images:
+            QMessageBox.information(
+                self,
+                "Nothing to Evaluate",
+                "No cell-marker annotations found in the database.",
+            )
+            return
+
+        settings = get_settings()
+        dlg = EvaluationSelectionDialog(
+            markers, images, seg_available=settings.seg_model is not None, parent=self
+        )
+        if dlg.exec() != EvaluationSelectionDialog.DialogCode.Accepted:
+            return
+
+        selected_markers = set(dlg.selected_markers())
+        selected_images = dlg.selected_images()
+        iou_threshold = dlg.iou_threshold()
+        task = dlg.task_type()
+
+        if not selected_markers or not selected_images:
+            QMessageBox.warning(
+                self, "Nothing Selected", "Select at least one marker and one image."
+            )
+            return
+
+        if task == "segmentation":
+            # Coded but inactive: the segmentation path needs a configured model.
+            QMessageBox.information(
+                self,
+                "Segmentation Not Available",
+                "Semantic segmentation evaluation requires a segmentation model "
+                "(set seg_model in settings.yaml).",
+            )
+            return
+
+        model_path = settings.cell_det_model
+        if model_path is None or not model_path.exists():
+            QMessageBox.warning(
+                self,
+                "Model Not Found",
+                f"Cell detection model not found:\n{model_path}\n\n"
+                "Check cell_det_model in settings.yaml.",
+            )
+            return
+
+        jobs = self._build_eval_jobs(selected_images, slide_paths, selected_markers)
+        total_fovs = sum(len(job.fovs) for job in jobs)
+        if total_fovs == 0:
+            QMessageBox.warning(
+                self,
+                "No Annotations Available",
+                "No annotations with this image / marker selection are available.",
+            )
+            return
+
+        if self._cell_det_model is None:
+            try:
+                self._cell_det_model = CellONNXInferDFINE(str(model_path), device="cpu")
+            except Exception as exc:
+                QMessageBox.critical(self, "Model Load Error", str(exc))
+                return
+
+        self._evaluate_action.setEnabled(False)
+        self._progress_bar.setValue(0)
+        self._progress_bar.setMaximum(total_fovs)
+        self._progress_bar.setVisible(True)
+        worker = EvaluationWorker(self._cell_det_model, jobs, iou_threshold)
+        worker.signals.progress.connect(self._on_eval_progress)
+        worker.signals.finished.connect(self._on_eval_finished)
+        worker.signals.error.connect(self._on_eval_error)
+        self._thread_pool.start(worker)
+
+    def _build_eval_jobs(
+        self, slide_names: list[str], slide_paths: dict, selected_markers: set[str]
+    ) -> list[SlideEvalJob]:
+        """Load ground-truth FOV boxes from the database for each slide."""
+        jobs: list[SlideEvalJob] = []
+        for slide_name in slide_names:
+            path = slide_paths.get(slide_name)
+            if not path or not path.exists():
+                continue
+            temp_store = AnnotationStore()
+            self._get_db().load_for_slide(slide_name, temp_store)
+            fov_gts: list[FovGT] = []
+            for fov in temp_store.fovs.values():
+                boxes_by_marker: dict[str, list] = {}
+                for m in temp_store.markers.values():
+                    if m.channel not in selected_markers:
+                        continue
+                    if fov.x <= m.x <= fov.x + fov.w and fov.y <= m.y <= fov.y + fov.h:
+                        box = (m.x - m.w / 2, m.y - m.h / 2, m.x + m.w / 2, m.y + m.h / 2)
+                        boxes_by_marker.setdefault(m.channel, []).append(box)
+                if boxes_by_marker:
+                    fov_gts.append(
+                        FovGT(
+                            int(fov.x),
+                            int(fov.y),
+                            int(fov.w),
+                            int(fov.h),
+                            boxes_by_marker,
+                        )
+                    )
+            if fov_gts:
+                jobs.append(SlideEvalJob(slide_name, path, fov_gts))
+        return jobs
+
+    def _on_eval_progress(self, done: int, total: int) -> None:
+        self._progress_bar.setMaximum(total)
+        self._progress_bar.setValue(done)
+
+    def _on_eval_finished(self, result) -> None:
+        self._progress_bar.setVisible(False)
+        self._evaluate_action.setEnabled(True)
+        model_path = get_settings().cell_det_model
+        model_name = model_path.stem if model_path else "cell_det_model"
+        try:
+            self._get_eval_db().save_evaluation(result, model_name)
+        except Exception as exc:
+            QMessageBox.warning(self, "Could Not Save Evaluation", str(exc))
+        dlg = EvaluationResultsDialog(result, parent=self)
+        dlg.exec()
+
+    def _show_evaluations(self) -> None:
+        records = self._get_eval_db().get_evaluations()
+        dlg = EvaluationsTableDialog(records, parent=self)
+        dlg.exec()
+
+    def _on_eval_error(self, msg: str) -> None:
+        self._progress_bar.setVisible(False)
+        self._evaluate_action.setEnabled(True)
+        QMessageBox.critical(self, "Evaluation Error", msg)
 
     def _on_fov_requested(self, scene_pos) -> None:
         if self._store is None:
@@ -793,4 +949,6 @@ class MainWindow(QMainWindow):
             self._reader.close()
         if self._db:
             self._db.close()
+        if self._eval_db:
+            self._eval_db.close()
         event.accept()

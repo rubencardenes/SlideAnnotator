@@ -6,6 +6,7 @@ import sys
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
+from .ui.app_icon import make_app_icon
 from .ui.main_window import MainWindow
 
 
@@ -21,6 +22,7 @@ def main() -> None:
     app = QApplication.instance() or QApplication(sys.argv)
     app.setApplicationName("SlideAnnotator")
     app.setAttribute(Qt.ApplicationAttribute.AA_UseHighDpiPixmaps, True)
+    app.setWindowIcon(make_app_icon())
 
     window = MainWindow()
     window.show()
