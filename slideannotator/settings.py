@@ -20,13 +20,21 @@ class Settings:
     annotations_dir: Path = field(default_factory=lambda: Path.home() / "data" / "annotations")
     stardist_model: Path | None = field(default=None)
     cell_det_model: Path | None = field(default=None)
+    seg_model: Path | None = field(default=None)
     db_path: Path = field(default_factory=lambda: Path("annotations.db"))
+    eval_db_path: Path | None = field(default=None)
     data_dir: Path | None = field(default=None)
     fov_size: tuple[int, int] = (512, 512)
     outline_thickness: int = 2
     outline_color: tuple[int, int, int] = (0, 255, 0)
     region_opacity: int = 50  # 0–100 percent
     detections_color: tuple[int, int, int] = (255, 0, 0)
+
+    def resolved_eval_db_path(self) -> Path:
+        """Evaluation DB path, defaulting to ``evaluations.db`` beside db_path."""
+        if self.eval_db_path is not None:
+            return self.eval_db_path
+        return self.db_path.expanduser().parent / "evaluations.db"
 
     @staticmethod
     def from_dict(data: dict) -> Settings:
@@ -37,8 +45,12 @@ class Settings:
             s.stardist_model = Path(data["stardist_model"]).expanduser()
         if "cell_det_model" in data:
             s.cell_det_model = Path(data["cell_det_model"]).expanduser()
+        if "seg_model" in data:
+            s.seg_model = Path(data["seg_model"]).expanduser()
         if "db_path" in data:
             s.db_path = Path(data["db_path"]).expanduser()
+        if "eval_db_path" in data:
+            s.eval_db_path = Path(data["eval_db_path"]).expanduser()
         if "data_dir" in data:
             s.data_dir = Path(data["data_dir"]).expanduser()
         if "fov_size" in data:
@@ -88,6 +100,10 @@ def save_settings(s: Settings) -> None:
         data["stardist_model"] = str(s.stardist_model)
     if s.cell_det_model is not None:
         data["cell_det_model"] = str(s.cell_det_model)
+    if s.seg_model is not None:
+        data["seg_model"] = str(s.seg_model)
+    if s.eval_db_path is not None:
+        data["eval_db_path"] = str(s.eval_db_path)
     if s.data_dir is not None:
         data["data_dir"] = str(s.data_dir)
     data.update(
