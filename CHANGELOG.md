@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.6.0 (2026-07-13)
+
+### Features
+
+- Evaluate ONNX models against annotations + app icon
+  ([`1c2b5be`](https://github.com/rubencardenes/SlideAnnotator/commit/1c2b5be81bb82b04ec85cde301abc3fded386eca))
+
+
 ## v1.5.1 (2026-07-05)
 
 ### Bug Fixes
