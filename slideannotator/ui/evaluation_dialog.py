@@ -48,11 +48,26 @@ _DIALOG_STYLE = (
 
 
 class _CheckList(QWidget):
-    """A titled, scrollable list of checkboxes with a select-all toggle."""
+    """A titled, scrollable list of checkboxes with a select-all toggle.
 
-    def __init__(self, title: str, items: list[str], parent=None) -> None:
+    Items can be tagged with the group(s) they belong to (``"train"`` /
+    ``"test"``); :meth:`set_group_filter` then shows only the items whose groups
+    intersect the active selection, and select-all / :meth:`selected` operate on
+    the visible items only.
+    """
+
+    def __init__(
+        self,
+        title: str,
+        items: list[str],
+        groups: dict[str, set[str]] | None = None,
+        parent=None,
+    ) -> None:
         super().__init__(parent)
         self._checkboxes: dict[str, QCheckBox] = {}
+        self._groups = groups or {}
+        # None means "no group filter yet" — every item is considered active.
+        self._active_groups: set[str] | None = None
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -98,18 +113,40 @@ class _CheckList(QWidget):
         # Start with all selected.
         self._select_all_cb.setCheckState(Qt.CheckState.Checked)
 
+    def _is_active(self, name: str) -> bool:
+        if self._active_groups is None:
+            return True
+        item_groups = self._groups.get(name)
+        # Items without group info stay visible under any filter.
+        return item_groups is None or bool(item_groups & self._active_groups)
+
+    def set_group_filter(self, active_groups: set[str]) -> None:
+        self._active_groups = active_groups
+        for name, cb in self._checkboxes.items():
+            cb.setVisible(self._is_active(name))
+        self._refresh_select_all()
+
     def selected(self) -> list[str]:
-        return [name for name, cb in self._checkboxes.items() if cb.isChecked()]
+        return [
+            name
+            for name, cb in self._checkboxes.items()
+            if cb.isChecked() and self._is_active(name)
+        ]
 
     def _on_select_all_changed(self, state: int) -> None:
         checked = state == Qt.CheckState.Checked.value
-        for cb in self._checkboxes.values():
+        for name, cb in self._checkboxes.items():
+            if not self._is_active(name):
+                continue
             cb.blockSignals(True)
             cb.setChecked(checked)
             cb.blockSignals(False)
 
     def _on_item_changed(self) -> None:
-        states = [cb.isChecked() for cb in self._checkboxes.values()]
+        self._refresh_select_all()
+
+    def _refresh_select_all(self) -> None:
+        states = [cb.isChecked() for name, cb in self._checkboxes.items() if self._is_active(name)]
         self._select_all_cb.blockSignals(True)
         if states and all(states):
             self._select_all_cb.setCheckState(Qt.CheckState.Checked)
@@ -129,25 +166,50 @@ class EvaluationSelectionDialog(QDialog):
         images: list[str],
         seg_available: bool = False,
         default_iou: float = 0.3,
+        image_groups: dict[str, set[str]] | None = None,
+        marker_groups: dict[str, set[str]] | None = None,
+        default_group: str = "test",
         parent=None,
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle("Evaluate Model")
-        self.setMinimumSize(480, 420)
+        self.setMinimumSize(480, 460)
         self.setStyleSheet(_DIALOG_STYLE)
 
         layout = QVBoxLayout(self)
         layout.setSpacing(10)
         layout.setContentsMargins(14, 12, 14, 14)
 
+        # Group filter — restricts both lists to train / test / both.
+        group_row = QHBoxLayout()
+        group_row.addWidget(QLabel("Group:"))
+        self._train_group_radio = QRadioButton("Train")
+        self._test_group_radio = QRadioButton("Test")
+        self._both_group_radio = QRadioButton("Both")
+        group_btns = QButtonGroup(self)
+        for rb in (self._train_group_radio, self._test_group_radio, self._both_group_radio):
+            group_btns.addButton(rb)
+            rb.toggled.connect(self._on_group_changed)
+            group_row.addWidget(rb)
+        group_row.addStretch()
+        layout.addLayout(group_row)
+
         # Two side-by-side check lists: markers | images.
         lists_row = QHBoxLayout()
         lists_row.setSpacing(12)
-        self._marker_list = _CheckList("Markers", markers)
-        self._image_list = _CheckList("Images", images)
+        self._marker_list = _CheckList("Markers", markers, marker_groups)
+        self._image_list = _CheckList("Images", images, image_groups)
         lists_row.addWidget(self._marker_list, 1)
         lists_row.addWidget(self._image_list, 1)
         layout.addLayout(lists_row, 1)
+
+        # Default group selection (applies the initial filter to both lists).
+        default = default_group if default_group in ("train", "test") else "test"
+        if default == "train":
+            self._train_group_radio.setChecked(True)
+        else:
+            self._test_group_radio.setChecked(True)
+        self._on_group_changed()
 
         sep = QFrame()
         sep.setFrameShape(QFrame.Shape.HLine)
@@ -197,6 +259,18 @@ class EvaluationSelectionDialog(QDialog):
         btns.accepted.connect(self.accept)
         btns.rejected.connect(self.reject)
         layout.addWidget(btns)
+
+    def _selected_groups(self) -> set[str]:
+        if self._both_group_radio.isChecked():
+            return {"train", "test"}
+        if self._train_group_radio.isChecked():
+            return {"train"}
+        return {"test"}
+
+    def _on_group_changed(self) -> None:
+        active = self._selected_groups()
+        self._marker_list.set_group_filter(active)
+        self._image_list.set_group_filter(active)
 
     def _on_task_changed(self) -> None:
         is_detection = self._detection_radio.isChecked()
