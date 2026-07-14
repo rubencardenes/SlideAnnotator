@@ -37,13 +37,45 @@ class CziSlideReader(ImageReaderCzi):
         self._x_offset: int = int(bbox.get("X", (0, 0))[0])
         self._y_offset: int = int(bbox.get("Y", (0, 0))[0])
 
+        # Detect RGB (e.g. brightfield) planes: pylibCZIrw returns these as a
+        # single (H, W, 3) BGR array per C-plane rather than a 2-D grayscale
+        # plane. Expose each such plane as three R/G/B channels so the rest of
+        # the (C, H, W) pipeline is unchanged; additive compositing with pure
+        # red/green/blue reconstructs the original colour image.
+        self._is_rgb = False
+        try:
+            ptype = str(self.czi.get_channel_pixel_type(0))
+            self._is_rgb = "Bgr" in ptype or "Rgb" in ptype
+        except Exception:
+            self._is_rgb = False
+
         raw_names: list[str] = meta.get("channel_names", [])
-        n_channels: int = meta["num_channels"]
+        n_planes: int = meta["num_channels"]
         self.channels: list[ChannelInfo] = []
-        for i in range(n_channels):
-            label = (raw_names[i].strip() if i < len(raw_names) else "") or f"Ch{i}"
-            color = assign_channel_color(label, i)
-            self.channels.append(ChannelInfo(index=i, name=label, color=color))
+        # Maps each display channel -> (czi C-plane, band index or None for gray).
+        self._channel_map: list[tuple[int, int | None]] = []
+        if self._is_rgb:
+            # pylibCZIrw yields bands in BGR order: 0=Blue, 1=Green, 2=Red.
+            rgb_bands = [
+                ("Red", 2, (255, 0, 0)),
+                ("Green", 1, (0, 255, 0)),
+                ("Blue", 0, (0, 0, 255)),
+            ]
+            idx = 0
+            for p in range(n_planes):
+                base = (raw_names[p].strip() if p < len(raw_names) else "") or ""
+                for cname, band, color in rgb_bands:
+                    label = f"{base} {cname}".strip() if base else cname
+                    self.channels.append(ChannelInfo(index=idx, name=label, color=color))
+                    self._channel_map.append((p, band))
+                    idx += 1
+            self.metadata["num_channels"] = len(self.channels)
+        else:
+            for i in range(n_planes):
+                label = (raw_names[i].strip() if i < len(raw_names) else "") or f"Ch{i}"
+                color = assign_channel_color(label, i)
+                self.channels.append(ChannelInfo(index=i, name=label, color=color))
+                self._channel_map.append((i, None))
 
         try:
             sample = np.squeeze(
@@ -79,6 +111,7 @@ class CziSlideReader(ImageReaderCzi):
         if actual_w <= 0 or actual_h <= 0:
             return np.zeros((h, w), dtype=np.uint16)
 
+        plane, band = self._channel_map[channel]
         factor = self.level_downsamples[level]
         # Translate from level-space to full-resolution scene coordinates
         roi_x = int(lx * factor) + self._x_offset
@@ -89,11 +122,14 @@ class CziSlideReader(ImageReaderCzi):
 
         arr = np.squeeze(
             self.czi.read(
-                plane={"C": channel},
+                plane={"C": plane},
                 roi=(roi_x, roi_y, roi_w, roi_h),
                 zoom=zoom,
             )
         )
+        # RGB planes come back as (H, W, 3); pick the requested band.
+        if band is not None and arr.ndim == 3:
+            arr = arr[:, :, band]
         arr = arr.astype(np.uint16)
 
         # Guard against sub-pixel rounding giving a slightly different shape
