@@ -15,27 +15,9 @@ from PySide6.QtWidgets import (
 )
 
 from ..settings import get_settings
+from ..utils.groups import TEST, TRAIN, classify_group
 
 _SUFFIXES = {".ome.tif", ".ome.tiff", ".ims", ".czi"}
-
-
-def _classify(path: Path, root: Path) -> str:
-    """Return "train" or "test" based on the slide's location under ``root``.
-
-    A slide is a test slide if any directory component of its path (relative to
-    ``root``) is named ``test``; it is a train slide if a component is named
-    ``train``. The shallowest matching component wins. Anything else — including
-    slides in no ``train``/``test`` subfolder — defaults to ``train``.
-    """
-    try:
-        rel = path.relative_to(root)
-    except ValueError:
-        return "train"
-    for part in rel.parts[:-1]:  # directory components only, shallow → deep
-        low = part.lower()
-        if low in ("train", "test"):
-            return low
-    return "train"
 
 
 class ImageListPanel(QWidget):
@@ -130,8 +112,8 @@ class ImageListPanel(QWidget):
             key=lambda p: p.name.lower(),
         )
 
-        train_paths = [p for p in paths if _classify(p, data_dir) == "train"]
-        test_paths = [p for p in paths if _classify(p, data_dir) == "test"]
+        train_paths = [p for p in paths if classify_group(p, data_dir) == TRAIN]
+        test_paths = [p for p in paths if classify_group(p, data_dir) == TEST]
 
         self._populate(self._train_list, train_paths, counts)
         self._populate(self._test_list, test_paths, counts)

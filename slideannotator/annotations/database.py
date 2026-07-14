@@ -240,6 +240,18 @@ class AnnotationDB:
         ).fetchall()
         return [r[0] for r in rows]
 
+    def get_channels_by_slide(self, ann_type: str) -> dict[str, set[str]]:
+        """Return {slide_name: {biomarker, ...}} for the given annotation type."""
+        rows = self._conn.execute(
+            "SELECT DISTINCT slide_name, biomarker FROM annotations "
+            "WHERE type = ? AND biomarker != ''",
+            (ann_type,),
+        ).fetchall()
+        result: dict[str, set[str]] = {}
+        for slide_name, biomarker in rows:
+            result.setdefault(slide_name, set()).add(biomarker)
+        return result
+
     def get_annotation_counts_by_slide(self) -> dict[str, dict[str, int]]:
         """Return {slide_name: {'cell_marker': N, 'region': M, 'fov': K}} for all slides."""
         rows = self._conn.execute(

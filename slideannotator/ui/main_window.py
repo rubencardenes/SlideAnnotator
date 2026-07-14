@@ -38,6 +38,7 @@ from ..tools.cell_marker_tool import CellMarkerTool
 from ..tools.pan_tool import PanTool
 from ..tools.region_tool import RegionTool
 from ..tools.select_tool import SelectTool
+from ..utils.groups import TEST, TRAIN, scan_slide_files, scan_slide_groups
 from ..viewsettings import load_view_settings, save_view_settings
 from .agent_panel import AgentPanel
 from .annotation_toolbar import AnnotationToolbar
@@ -214,6 +215,14 @@ class MainWindow(QMainWindow):
 
         self._show_evaluations_action = file_menu.addAction("Sho&w Evaluations…")
         self._show_evaluations_action.triggered.connect(self._show_evaluations)
+
+        file_menu.addSeparator()
+        self._refresh_paths_action = file_menu.addAction("Refresh File &Locations…")
+        self._refresh_paths_action.setToolTip(
+            "Update the slide file paths stored in the database to match their "
+            "current location under data_dir."
+        )
+        self._refresh_paths_action.triggered.connect(self._refresh_file_locations)
 
         file_menu.addSeparator()
         quit_action = file_menu.addAction("&Quit")
@@ -506,6 +515,47 @@ class MainWindow(QMainWindow):
         dlg.exec()
 
     # ------------------------------------------------------------------
+    def _refresh_file_locations(self) -> None:
+        """Rewrite the DB's recorded slide paths to match files on disk."""
+        settings = get_settings()
+        if settings.data_dir is None:
+            QMessageBox.warning(
+                self,
+                "No Data Directory",
+                "No data_dir is configured in settings.yaml.",
+            )
+            return
+
+        files = scan_slide_files(settings.data_dir)
+        db = self._get_db()
+        current = db.get_slide_paths()
+
+        updated = 0
+        unchanged = 0
+        not_found: list[str] = []
+        for slide_name, old_path in current.items():
+            new_path = files.get(slide_name)
+            if new_path is None:
+                not_found.append(slide_name)
+                continue
+            if old_path is None or Path(old_path) != new_path:
+                db.record_slide_path(slide_name, new_path)
+                updated += 1
+            else:
+                unchanged += 1
+
+        lines = [
+            f"Updated: {updated}",
+            f"Already up to date: {unchanged}",
+            f"Not found on disk: {len(not_found)}",
+        ]
+        if not_found:
+            lines.append("")
+            lines.append("Not found:")
+            lines.extend(f"  • {name}" for name in not_found)
+        QMessageBox.information(self, "Refresh File Locations", "\n".join(lines))
+
+    # ------------------------------------------------------------------
     # Model evaluation
     def _show_evaluate(self) -> None:
         db = self._get_db()
@@ -521,8 +571,29 @@ class MainWindow(QMainWindow):
             return
 
         settings = get_settings()
+
+        # Tag each slide (and thereby each marker) with its train/test group so
+        # the dialog can filter by group. Group is derived from where the slide
+        # file actually lives under data_dir (the paths recorded in the DB can be
+        # stale); slides not found on disk default to train.
+        group_by_stem = (
+            scan_slide_groups(settings.data_dir) if settings.data_dir is not None else {}
+        )
+        image_groups = {name: {group_by_stem.get(name, TRAIN)} for name in slide_paths}
+        marker_groups: dict[str, set[str]] = {}
+        for slide_name, channels in db.get_channels_by_slide("cell_marker").items():
+            groups = image_groups.get(slide_name, {TRAIN})
+            for channel in channels:
+                marker_groups.setdefault(channel, set()).update(groups)
+
         dlg = EvaluationSelectionDialog(
-            markers, images, seg_available=settings.seg_model is not None, parent=self
+            markers,
+            images,
+            seg_available=settings.seg_model is not None,
+            image_groups=image_groups,
+            marker_groups=marker_groups,
+            default_group=TEST,
+            parent=self,
         )
         if dlg.exec() != EvaluationSelectionDialog.DialogCode.Accepted:
             return
