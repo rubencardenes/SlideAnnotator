@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.7.0 (2026-07-14)
+
+### Bug Fixes
+
+- **ciz_slide_reader**: Fixed problem with czi reader, support for RGB
+  ([`85daedb`](https://github.com/rubencardenes/SlideAnnotator/commit/85daedb4a46c46b9a40557db7dd575031ff8e57c))
+
+### Features
+
+- **ui**: Split image panel into Train/Test sections
+  ([`e5a9550`](https://github.com/rubencardenes/SlideAnnotator/commit/e5a9550f7b5c3dabded0c5d8c6002f481d76158c))
+
+
 ## v1.6.0 (2026-07-13)
 
 ### Features
