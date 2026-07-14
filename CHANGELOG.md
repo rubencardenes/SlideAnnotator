@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.8.0 (2026-07-14)
+
+### Features
+
+- **eval**: Filter markers/images by train/test group + refresh DB paths
+  ([`ddc9092`](https://github.com/rubencardenes/SlideAnnotator/commit/ddc9092b87e460434622540c09706377c739184f))
+
+
 ## v1.7.0 (2026-07-14)
 
 ### Bug Fixes
