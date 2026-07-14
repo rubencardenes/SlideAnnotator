@@ -19,6 +19,25 @@ from ..settings import get_settings
 _SUFFIXES = {".ome.tif", ".ome.tiff", ".ims", ".czi"}
 
 
+def _classify(path: Path, root: Path) -> str:
+    """Return "train" or "test" based on the slide's location under ``root``.
+
+    A slide is a test slide if any directory component of its path (relative to
+    ``root``) is named ``test``; it is a train slide if a component is named
+    ``train``. The shallowest matching component wins. Anything else — including
+    slides in no ``train``/``test`` subfolder — defaults to ``train``.
+    """
+    try:
+        rel = path.relative_to(root)
+    except ValueError:
+        return "train"
+    for part in rel.parts[:-1]:  # directory components only, shallow → deep
+        low = part.lower()
+        if low in ("train", "test"):
+            return low
+    return "train"
+
+
 class ImageListPanel(QWidget):
     image_opened = Signal(Path)
 
@@ -53,15 +72,38 @@ class ImageListPanel(QWidget):
         header.addWidget(self._refresh_btn)
         layout.addWidget(header_widget)
 
-        self._list = QListWidget()
-        self._list.setStyleSheet(
+        self._train_header = self._make_section_header("Train")
+        layout.addWidget(self._train_header)
+        self._train_list = self._make_list()
+        layout.addWidget(self._train_list)
+
+        self._test_header = self._make_section_header("Test")
+        layout.addWidget(self._test_header)
+        self._test_list = self._make_list()
+        layout.addWidget(self._test_list)
+
+        self._layout = layout
+
+    def _make_section_header(self, text: str) -> QLabel:
+        label = QLabel(text)
+        label.setStyleSheet(
+            "QLabel { background: #202020; color: #9aa4b2;"
+            " font-size: 11px; font-weight: bold; letter-spacing: 1px;"
+            " padding: 4px 8px; border-top: 1px solid #2a2a2a;"
+            " border-bottom: 1px solid #2a2a2a; }"
+        )
+        return label
+
+    def _make_list(self) -> QListWidget:
+        lst = QListWidget()
+        lst.setStyleSheet(
             "QListWidget { background: #1e1e1e; border: none; color: #ddd; }"
             "QListWidget::item { padding: 6px 8px; border-bottom: 1px solid #2a2a2a; }"
             "QListWidget::item:selected { background: #2a4a7a; }"
             "QListWidget::item:hover:!selected { background: #252525; }"
         )
-        self._list.itemDoubleClicked.connect(self._on_double_click)
-        layout.addWidget(self._list)
+        lst.itemDoubleClicked.connect(self._on_double_click)
+        return lst
 
     def refresh(self) -> None:
         settings = get_settings()
@@ -88,7 +130,27 @@ class ImageListPanel(QWidget):
             key=lambda p: p.name.lower(),
         )
 
-        self._list.clear()
+        train_paths = [p for p in paths if _classify(p, data_dir) == "train"]
+        test_paths = [p for p in paths if _classify(p, data_dir) == "test"]
+
+        self._populate(self._train_list, train_paths, counts)
+        self._populate(self._test_list, test_paths, counts)
+
+        # The test section only appears when there are test slides.
+        has_test = bool(test_paths)
+        self._test_header.setVisible(has_test)
+        self._test_list.setVisible(has_test)
+
+        # Share vertical space proportionally to the number of slides in each
+        # section so a long train list does not starve a short test list.
+        self._layout.setStretchFactor(self._train_list, max(1, len(train_paths)))
+        if has_test:
+            self._layout.setStretchFactor(self._test_list, max(1, len(test_paths)))
+
+    def _populate(
+        self, list_widget: QListWidget, paths: list[Path], counts: dict[str, dict[str, int]]
+    ) -> None:
+        list_widget.clear()
         for path in paths:
             slide_name = path.stem
             c = counts.get(slide_name, {})
@@ -103,8 +165,8 @@ class ImageListPanel(QWidget):
             widget = _ImageItem(path.name, markers, regions, fovs)
             widget.adjustSize()
             item.setSizeHint(widget.sizeHint())
-            self._list.addItem(item)
-            self._list.setItemWidget(item, widget)
+            list_widget.addItem(item)
+            list_widget.setItemWidget(item, widget)
 
     def _on_double_click(self, item: QListWidgetItem) -> None:
         path = item.data(Qt.ItemDataRole.UserRole)
@@ -113,14 +175,15 @@ class ImageListPanel(QWidget):
 
     def update_counts_for(self, slide_name: str, markers: int, regions: int, fovs: int) -> None:
         """Refresh the count display for a single slide after saving."""
-        for i in range(self._list.count()):
-            item = self._list.item(i)
-            path = item.data(Qt.ItemDataRole.UserRole)
-            if path and path.stem == slide_name:
-                widget = self._list.itemWidget(item)
-                if isinstance(widget, _ImageItem):
-                    widget.set_counts(markers, regions, fovs)
-                break
+        for list_widget in (self._train_list, self._test_list):
+            for i in range(list_widget.count()):
+                item = list_widget.item(i)
+                path = item.data(Qt.ItemDataRole.UserRole)
+                if path and path.stem == slide_name:
+                    widget = list_widget.itemWidget(item)
+                    if isinstance(widget, _ImageItem):
+                        widget.set_counts(markers, regions, fovs)
+                    return
 
 
 class _ImageItem(QWidget):
