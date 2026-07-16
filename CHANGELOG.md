@@ -2,6 +2,25 @@
 
 <!-- version list -->
 
+## v1.9.0 (2026-07-16)
+
+### Code Style
+
+- Ruff format
+  ([`a46f361`](https://github.com/rubencardenes/SlideAnnotator/commit/a46f3614bd16868d099c7d7ad5e7d76491d778ba))
+
+### Features
+
+- Adapted ONNX inference to deal with more normalization schemes
+  ([`da59849`](https://github.com/rubencardenes/SlideAnnotator/commit/da5984945503e97b8b324fd423ce0aedee7c5294))
+
+- **inference**: Add RF-DETR cell detector support
+  ([`8a29c49`](https://github.com/rubencardenes/SlideAnnotator/commit/8a29c499d3ba76cdde903e1d247ab752d7f094cd))
+
+- **ui**: Make evaluations table sortable, filterable, and editable
+  ([`c212d8f`](https://github.com/rubencardenes/SlideAnnotator/commit/c212d8f530eb1417ce5b8885a76ab63196ba8e2f))
+
+
 ## v1.8.0 (2026-07-14)
 
 ### Features
