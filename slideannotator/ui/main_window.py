@@ -707,8 +707,9 @@ class MainWindow(QMainWindow):
         dlg.exec()
 
     def _show_evaluations(self) -> None:
-        records = self._get_eval_db().get_evaluations()
-        dlg = EvaluationsTableDialog(records, parent=self)
+        db = self._get_eval_db()
+        records = db.get_evaluations()
+        dlg = EvaluationsTableDialog(records, db=db, parent=self)
         dlg.exec()
 
     def _on_eval_error(self, msg: str) -> None:

@@ -61,6 +61,38 @@ def test_segmentation_stores_dice_and_accuracy(tmp_path) -> None:
     assert cd8.n_fovs == 2
 
 
+def test_delete_evaluation_removes_record_and_orphan_model(tmp_path) -> None:
+    db = EvaluationDB(tmp_path / "evaluations.db")
+    try:
+        eval_id = db.save_evaluation(_detection_result(), "my_model")
+        assert len(db.get_evaluations()) == 1
+
+        db.delete_evaluation(eval_id)
+        assert db.get_evaluations() == []
+
+        # Metric rows cascade-deleted; orphan model row removed too.
+        conn = db._conn
+        assert conn.execute("SELECT COUNT(*) FROM evaluation_metrics").fetchone()[0] == 0
+        assert conn.execute("SELECT COUNT(*) FROM models").fetchone()[0] == 0
+    finally:
+        db.close()
+
+
+def test_delete_evaluation_keeps_model_with_other_evaluations(tmp_path) -> None:
+    db = EvaluationDB(tmp_path / "evaluations.db")
+    try:
+        first = db.save_evaluation(_detection_result(), "my_model")
+        db.save_evaluation(_detection_result(), "my_model")
+
+        db.delete_evaluation(first)
+        records = db.get_evaluations()
+        assert len(records) == 1
+        # Shared model row still present for the surviving evaluation.
+        assert db._conn.execute("SELECT COUNT(*) FROM models").fetchone()[0] == 1
+    finally:
+        db.close()
+
+
 def test_multiple_evaluations_sorted_newest_first(tmp_path) -> None:
     db = EvaluationDB(tmp_path / "evaluations.db")
     try:
