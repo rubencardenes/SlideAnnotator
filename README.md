@@ -2,6 +2,10 @@
 
 A desktop annotation tool for multiplex immunofluorescence (mIF) whole-slide images. Built with PySide6, pyvips, and numpy.
 
+![SlideAnnotator main window](docs/images/SlideAnnotator_1.png)
+
+*The main window: the left **Images** panel lists slides with live marker / region / FOV counts, the central pyramid-aware viewer shows composited channels (blue DAPI nuclei, orange CD4 markers) with labelled FOV boxes, the right **Channels** panel gives per-channel colour, visibility, and annotation counts, and the bottom bar accepts natural-language questions about the annotation database.*
+
 ## Features
 
 - **Multi-channel viewer** — display and composite any number of fluorescence channels, each with an independently configurable colour, visibility toggle, and min/max intensity range.
@@ -25,8 +29,10 @@ A desktop annotation tool for multiplex immunofluorescence (mIF) whole-slide ima
 - **Unsaved-changes guard** — prompts to save before opening a new image or quitting.
 - **Colorful icon toolbar** — tool buttons use crisp QPainter-drawn icons (pan, marker, region, select, eye, box-marker, save, load, quit) instead of text characters, avoiding platform emoji rendering issues.
 - **StarDist nucleus segmentation** — run StarDist (ONNX) inference on all FOVs in a background thread; detected cell outlines are overlaid on the slide. Toggle outline visibility with the toolbar button; customise all application settings (paths, appearance, FOV size) via **StarDist → Settings**.
-- **DFINE cell detection** — run a DFINE ONNX object-detection model on all FOV tiles in a background thread. The active marker channel is mapped to red, DAPI/Hoechst to blue. Detected cells appear as zoom-invariant cross markers. Use the toolbar **Convert** button to turn detections into cell marker annotations.
-- **Image list panel** — a right-hand sidebar lists every slide image found under the configured `data_dir`. Each entry shows live annotation counts (markers / regions / FOVs) drawn from the SQLite database. Double-click any entry to open that slide.
+- **Cell detection (D-FINE / RT-DETR / RF-DETR)** — run an ONNX object-detection model on all FOV tiles in a background thread. The model family is auto-detected from the ONNX input/output signature, so D-FINE, RT-DETR, and RF-DETR detectors are interchangeable via a single `cell_det_model` setting. The active marker channel is mapped to red, DAPI/Hoechst to blue. Detected cells appear as zoom-invariant cross markers. Use the toolbar **Convert** button to turn detections into cell marker annotations.
+- **Configurable input normalization** — RF-DETR detectors support selectable preprocessing via `cell_det_norm`: `imagenet` (16-bit scale to 0–1 then ImageNet mean/std) or `none` (16-bit scale to 0–1 only). Set it in `settings.yaml` or from the settings dialog.
+- **Model evaluation** — evaluate a cell-detection model against your ground-truth annotations. Results appear in a sortable, filterable, and editable table, with markers/images selectable by train/test group.
+- **Image list panel** — a left-hand sidebar lists every slide image found under the configured `data_dir`, split into **Train** / **Test** sections. Each entry shows live annotation counts (markers / regions / FOVs) drawn from the SQLite database. Double-click any entry to open that slide.
 - **SQLite annotation database** — annotations are written to a SQLite database (WAL mode) in addition to JSON sidecars, enabling fast cross-slide queries and powering the image list panel counts.
 - **Annotation summary** — **Summary** toolbar button opens a dialog showing, across all annotation files in the configured directory, the total count of cell markers, regions, and FOVs grouped by slide and channel.
 - **Image properties** — toolbar button / **File → Image Properties…** (`Ctrl+I`) shows metadata for the currently open slide (dimensions, pyramid levels, channels, etc.).
@@ -112,7 +118,8 @@ annotations_dir: ~/data/annotations
 |-----|---------|-------------|
 | `annotations_dir` | `~/data/annotations` | Directory where annotation JSON files are saved and loaded from. |
 | `stardist_model` | *(none)* | Path to the StarDist ONNX model file used for nucleus segmentation. |
-| `cell_det_model` | *(none)* | Path to the DFINE ONNX model file used for cell detection. |
+| `cell_det_model` | *(none)* | Path to the ONNX model file used for cell detection (D-FINE, RT-DETR, or RF-DETR — auto-detected). |
+| `cell_det_norm` | `imagenet` | RF-DETR input normalization: `imagenet` (0–1 scale + ImageNet mean/std) or `none` (16-bit 0–1 scale only). Ignored by D-FINE/RT-DETR. |
 | `db_path` | `~/data/annotations/annotations.db` | Path to the SQLite annotation database. |
 | `data_dir` | *(none)* | Root directory scanned recursively for slide images shown in the image list panel. |
 | `fov_size` | `[512, 512]` | Width and height in pixels of FOV rectangles stamped with the `F` key. |
@@ -156,7 +163,7 @@ slideannotator/
 │   ├── stardist.py         # StarDistONNX — ONNX model wrapper
 │   ├── stardist_worker.py  # QRunnable background inference worker
 │   ├── stardist_utils.py   # Pre/post-processing helpers
-│   ├── CellONNXInference.py  # DFINE / RT-DETR ONNX cell detection models
+│   ├── CellONNXInference.py  # D-FINE / RT-DETR / RF-DETR ONNX cell detection models
 │   ├── cell_det_worker.py  # QRunnable background cell detection worker
 │   └── nms.py              # Non-maximum suppression
 ├── ui/
