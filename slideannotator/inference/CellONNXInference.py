@@ -315,9 +315,7 @@ def create_cell_detector(
     output_names = {o.name for o in session.get_outputs()}
 
     if len(input_names) == 1 and {"dets", "labels"} <= output_names:
-        logger.info(
-            f"Detected RF-DETR cell detector (normalize={normalize_scheme}): {model_path}"
-        )
+        logger.info(f"Detected RF-DETR cell detector (normalize={normalize_scheme}): {model_path}")
         return CellONNXInferRFDETR(
             str(model_path),
             device=device,
