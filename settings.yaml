@@ -1,7 +1,10 @@
 annotations_dir: /Users/ruben/data/annotations
 db_path: /Users/ruben/data/annotations/annotations.db
 stardist_model: /Users/ruben/data/models/stardist-versatile-fluo_dynamic.onnx
-cell_det_model: /Users/ruben/data/models/dfine_non_nuclear_ep99_v37.onnx
+#cell_det_model: /Users/ruben/data/models/dfine_non_nuclear_ep99_v37.onnx
+#cell_det_model: /Users/ruben/data/models/rf-detr-cells-rubikom_best_total.onnx
+cell_det_model: /Users/ruben/data/models/rf-detr-cells-rubikom_16bit-norm.onnx
+cell_det_norm: none
 data_dir: /Users/ruben/data
 fov_size: [512, 512]
 outline_thickness: 4

@@ -291,5 +291,14 @@ class EvaluationDB:
             )
         return records
 
+    def delete_evaluation(self, eval_id: int) -> None:
+        """Permanently remove an evaluation and its metric rows."""
+        self._conn.execute("DELETE FROM evaluations WHERE id = ?", (eval_id,))
+        # Drop the parent model if it no longer has any evaluations.
+        self._conn.execute(
+            "DELETE FROM models WHERE id NOT IN (SELECT DISTINCT model_id FROM evaluations)"
+        )
+        self._conn.commit()
+
     def close(self) -> None:
         self._conn.close()

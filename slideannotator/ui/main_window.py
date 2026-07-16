@@ -26,8 +26,9 @@ from ..compositing.compositor import ChannelSettings
 from ..graphics.slide_scene import SlideScene
 from ..graphics.slide_view import SlideView
 from ..inference.cell_det_worker import CellDetWorker
-from ..inference.CellONNXInference import CellONNXInferDFINE
+from ..inference.CellONNXInference import create_cell_detector
 from ..inference.eval_worker import EvaluationWorker, FovGT, SlideEvalJob
+from ..inference.ONNXInferenceBase import ONNXInferenceBase
 from ..inference.stardist import StarDistONNX
 from ..inference.stardist_worker import StarDistWorker
 from ..readers import open_slide
@@ -71,7 +72,7 @@ class MainWindow(QMainWindow):
         self._stardist_model: StarDistONNX | None = None
         self._stardist_outline_color = None  # persists across image loads
         self._stardist_outline_width = None
-        self._cell_det_model: CellONNXInferDFINE | None = None
+        self._cell_det_model: ONNXInferenceBase | None = None
         self._cell_det_boxes: list[tuple[float, float, float, float]] = []
         self._db: AnnotationDB | None = None
         self._eval_db: EvaluationDB | None = None
@@ -641,7 +642,9 @@ class MainWindow(QMainWindow):
 
         if self._cell_det_model is None:
             try:
-                self._cell_det_model = CellONNXInferDFINE(str(model_path), device="cpu")
+                self._cell_det_model = create_cell_detector(
+                    str(model_path), device="cpu", normalize_scheme=settings.cell_det_norm
+                )
             except Exception as exc:
                 QMessageBox.critical(self, "Model Load Error", str(exc))
                 return
@@ -707,8 +710,9 @@ class MainWindow(QMainWindow):
         dlg.exec()
 
     def _show_evaluations(self) -> None:
-        records = self._get_eval_db().get_evaluations()
-        dlg = EvaluationsTableDialog(records, parent=self)
+        db = self._get_eval_db()
+        records = db.get_evaluations()
+        dlg = EvaluationsTableDialog(records, db=db, parent=self)
         dlg.exec()
 
     def _on_eval_error(self, msg: str) -> None:
@@ -889,7 +893,8 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "No FOVs", "Add FOV annotations first (F key).")
             return
 
-        model_path = get_settings().cell_det_model
+        settings = get_settings()
+        model_path = settings.cell_det_model
         if model_path is None or not model_path.exists():
             QMessageBox.warning(
                 self,
@@ -900,7 +905,9 @@ class MainWindow(QMainWindow):
 
         if self._cell_det_model is None:
             try:
-                self._cell_det_model = CellONNXInferDFINE(str(model_path), device="cpu")
+                self._cell_det_model = create_cell_detector(
+                    str(model_path), device="cpu", normalize_scheme=settings.cell_det_norm
+                )
             except Exception as exc:
                 QMessageBox.critical(self, "Model Load Error", str(exc))
                 return
