@@ -6,7 +6,7 @@ import numpy as np
 from PySide6.QtCore import QObject, QRunnable, Signal, Slot
 
 from ..annotations.models import FOVAnnotation
-from .CellONNXInference import CellONNXInferDFINE
+from .ONNXInferenceBase import ONNXInferenceBase
 
 _TILE_SIZE = 512
 # TODO: remove debug — temp dir for saving inference tiles
@@ -32,7 +32,7 @@ class CellDetWorker(QRunnable):
 
     def __init__(
         self,
-        model: CellONNXInferDFINE,
+        model: ONNXInferenceBase,
         fovs: list[FOVAnnotation],
         reader,
         channel_r: int | None,

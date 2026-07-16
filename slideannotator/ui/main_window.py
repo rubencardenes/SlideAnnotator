@@ -26,8 +26,9 @@ from ..compositing.compositor import ChannelSettings
 from ..graphics.slide_scene import SlideScene
 from ..graphics.slide_view import SlideView
 from ..inference.cell_det_worker import CellDetWorker
-from ..inference.CellONNXInference import CellONNXInferDFINE
+from ..inference.CellONNXInference import create_cell_detector
 from ..inference.eval_worker import EvaluationWorker, FovGT, SlideEvalJob
+from ..inference.ONNXInferenceBase import ONNXInferenceBase
 from ..inference.stardist import StarDistONNX
 from ..inference.stardist_worker import StarDistWorker
 from ..readers import open_slide
@@ -71,7 +72,7 @@ class MainWindow(QMainWindow):
         self._stardist_model: StarDistONNX | None = None
         self._stardist_outline_color = None  # persists across image loads
         self._stardist_outline_width = None
-        self._cell_det_model: CellONNXInferDFINE | None = None
+        self._cell_det_model: ONNXInferenceBase | None = None
         self._cell_det_boxes: list[tuple[float, float, float, float]] = []
         self._db: AnnotationDB | None = None
         self._eval_db: EvaluationDB | None = None
@@ -641,7 +642,7 @@ class MainWindow(QMainWindow):
 
         if self._cell_det_model is None:
             try:
-                self._cell_det_model = CellONNXInferDFINE(str(model_path), device="cpu")
+                self._cell_det_model = create_cell_detector(str(model_path), device="cpu")
             except Exception as exc:
                 QMessageBox.critical(self, "Model Load Error", str(exc))
                 return
@@ -901,7 +902,7 @@ class MainWindow(QMainWindow):
 
         if self._cell_det_model is None:
             try:
-                self._cell_det_model = CellONNXInferDFINE(str(model_path), device="cpu")
+                self._cell_det_model = create_cell_detector(str(model_path), device="cpu")
             except Exception as exc:
                 QMessageBox.critical(self, "Model Load Error", str(exc))
                 return

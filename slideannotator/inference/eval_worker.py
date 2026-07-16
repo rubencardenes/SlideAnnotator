@@ -14,8 +14,8 @@ import numpy as np
 from PySide6.QtCore import QObject, QRunnable, Signal, Slot
 
 from ..readers import open_slide
-from .CellONNXInference import CellONNXInferDFINE
 from .evaluation import Box, EvaluationResult, match_boxes
+from .ONNXInferenceBase import ONNXInferenceBase
 
 _TILE_SIZE = 512
 
@@ -59,7 +59,7 @@ class EvaluationWorker(QRunnable):
 
     def __init__(
         self,
-        model: CellONNXInferDFINE,
+        model: ONNXInferenceBase,
         jobs: list[SlideEvalJob],
         iou_threshold: float,
     ) -> None:
