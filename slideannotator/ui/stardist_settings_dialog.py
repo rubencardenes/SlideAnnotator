@@ -6,6 +6,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QColorDialog,
+    QComboBox,
     QDialog,
     QDialogButtonBox,
     QFileDialog,
@@ -38,6 +39,10 @@ _STYLE = (
     "QPushButton { background: #2e2e2e; color: #ccc; border: 1px solid #444;"
     "  border-radius: 4px; padding: 3px 8px; }"
     "QPushButton:hover { background: #3a3a3a; }"
+    "QComboBox { background: #2a2a2a; color: #ccc; border: 1px solid #444;"
+    "  border-radius: 4px; padding: 2px 4px; }"
+    "QComboBox QAbstractItemView { background: #2a2a2a; color: #ccc;"
+    "  selection-background-color: #3a3a3a; }"
     "QScrollArea { border: none; background: #222; }"
     "QScrollBar:vertical { background: #2a2a2a; width: 8px; }"
     "QScrollBar::handle:vertical { background: #555; border-radius: 4px; }"
@@ -120,6 +125,15 @@ class SettingsDialog(QDialog):
             is_dir=False,
             file_filter="ONNX models (*.onnx)",
         )
+        self._cell_det_norm = QComboBox()
+        self._cell_det_norm.addItems(["imagenet", "none"])
+        idx = self._cell_det_norm.findText(self._settings.cell_det_norm)
+        self._cell_det_norm.setCurrentIndex(idx if idx >= 0 else 0)
+        self._cell_det_norm.setToolTip(
+            "RF-DETR normalization: 'imagenet' (0-1 scale + ImageNet mean/std) or "
+            "'none' (16-bit 0-1 scale only). Ignored by D-FINE/RT-DETR."
+        )
+        form.addRow("Cell det. normalization:", self._cell_det_norm)
         return box
 
     def _build_stardist_group(self) -> QGroupBox:
@@ -282,6 +296,7 @@ class SettingsDialog(QDialog):
 
         cd_text = self._cell_det_model_edit.text().strip()
         s.cell_det_model = Path(cd_text).expanduser() if cd_text else None
+        s.cell_det_norm = self._cell_det_norm.currentText()
 
         s.outline_color = (
             self._outline_color.red(),

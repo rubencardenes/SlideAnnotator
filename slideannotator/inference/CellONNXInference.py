@@ -289,7 +289,9 @@ class CellONNXInferRFDETR(ONNXInferenceBase):
         return self.postprocess(results_ort, prob_thresh, iou_th)
 
 
-def create_cell_detector(model_path, device: str = "cpu") -> ONNXInferenceBase:
+def create_cell_detector(
+    model_path, device: str = "cpu", normalize_scheme: str = "imagenet"
+) -> ONNXInferenceBase:
     """Build the cell-detection inference wrapper matching an ONNX model.
 
     Dispatches on the model's input/output signature so different exported
@@ -298,6 +300,11 @@ def create_cell_detector(model_path, device: str = "cpu") -> ONNXInferenceBase:
       * RF-DETR — a single ``input`` and ``dets`` + ``labels`` outputs.
       * D-FINE / RT-DETR — ``images`` + ``orig_target_sizes`` inputs and
         ``labels`` / ``boxes`` / ``scores`` outputs (the default).
+
+    ``normalize_scheme`` selects the RF-DETR preprocessing normalisation
+    (``"imagenet"`` for 0-1 scale + ImageNet mean/std, or ``"none"`` for a
+    16-bit 0-1 scale only). It is ignored by D-FINE/RT-DETR, which always
+    scale by 65535.
 
     The inspection session is reused by the chosen wrapper, so the model is
     loaded only once.
@@ -308,8 +315,15 @@ def create_cell_detector(model_path, device: str = "cpu") -> ONNXInferenceBase:
     output_names = {o.name for o in session.get_outputs()}
 
     if len(input_names) == 1 and {"dets", "labels"} <= output_names:
-        logger.info(f"Detected RF-DETR cell detector: {model_path}")
-        return CellONNXInferRFDETR(str(model_path), device=device, session=session)
+        logger.info(
+            f"Detected RF-DETR cell detector (normalize={normalize_scheme}): {model_path}"
+        )
+        return CellONNXInferRFDETR(
+            str(model_path),
+            device=device,
+            normalize_scheme=normalize_scheme,
+            session=session,
+        )
 
     logger.info(f"Detected D-FINE/RT-DETR cell detector: {model_path}")
     return CellONNXInferDFINE(str(model_path), device=device, session=session)

@@ -642,7 +642,9 @@ class MainWindow(QMainWindow):
 
         if self._cell_det_model is None:
             try:
-                self._cell_det_model = create_cell_detector(str(model_path), device="cpu")
+                self._cell_det_model = create_cell_detector(
+                    str(model_path), device="cpu", normalize_scheme=settings.cell_det_norm
+                )
             except Exception as exc:
                 QMessageBox.critical(self, "Model Load Error", str(exc))
                 return
@@ -891,7 +893,8 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "No FOVs", "Add FOV annotations first (F key).")
             return
 
-        model_path = get_settings().cell_det_model
+        settings = get_settings()
+        model_path = settings.cell_det_model
         if model_path is None or not model_path.exists():
             QMessageBox.warning(
                 self,
@@ -902,7 +905,9 @@ class MainWindow(QMainWindow):
 
         if self._cell_det_model is None:
             try:
-                self._cell_det_model = create_cell_detector(str(model_path), device="cpu")
+                self._cell_det_model = create_cell_detector(
+                    str(model_path), device="cpu", normalize_scheme=settings.cell_det_norm
+                )
             except Exception as exc:
                 QMessageBox.critical(self, "Model Load Error", str(exc))
                 return

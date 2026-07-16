@@ -20,6 +20,9 @@ class Settings:
     annotations_dir: Path = field(default_factory=lambda: Path.home() / "data" / "annotations")
     stardist_model: Path | None = field(default=None)
     cell_det_model: Path | None = field(default=None)
+    # Normalization scheme for RF-DETR cell detectors: "imagenet" (0-1 scale +
+    # ImageNet mean/std) or "none" (16-bit 0-1 scale only). Ignored by D-FINE/RT-DETR.
+    cell_det_norm: str = field(default="imagenet")
     seg_model: Path | None = field(default=None)
     db_path: Path = field(default_factory=lambda: Path("annotations.db"))
     eval_db_path: Path | None = field(default=None)
@@ -45,6 +48,8 @@ class Settings:
             s.stardist_model = Path(data["stardist_model"]).expanduser()
         if "cell_det_model" in data:
             s.cell_det_model = Path(data["cell_det_model"]).expanduser()
+        if "cell_det_norm" in data:
+            s.cell_det_norm = str(data["cell_det_norm"])
         if "seg_model" in data:
             s.seg_model = Path(data["seg_model"]).expanduser()
         if "db_path" in data:
@@ -100,6 +105,7 @@ def save_settings(s: Settings) -> None:
         data["stardist_model"] = str(s.stardist_model)
     if s.cell_det_model is not None:
         data["cell_det_model"] = str(s.cell_det_model)
+    data["cell_det_norm"] = s.cell_det_norm
     if s.seg_model is not None:
         data["seg_model"] = str(s.seg_model)
     if s.eval_db_path is not None:
