@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.10.0 (2026-07-24)
+
+### Documentation
+
+- Update README for latest changes and add app screenshot
+  ([`0d824ac`](https://github.com/rubencardenes/SlideAnnotator/commit/0d824ac7e1c62688f8b8e4831422a8422466de55))
+
+### Features
+
+- **regions**: Merge touching regions and punch holes
+  ([`77c3027`](https://github.com/rubencardenes/SlideAnnotator/commit/77c302713185046b23f3d95023d448bb290c0767))
+
+
 ## v1.9.0 (2026-07-16)
 
 ### Code Style
