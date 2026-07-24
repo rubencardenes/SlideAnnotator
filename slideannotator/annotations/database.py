@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS region_points (
     seq           INTEGER NOT NULL,
     px            REAL NOT NULL,
     py            REAL NOT NULL,
+    ring          INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (annotation_id, seq),
     FOREIGN KEY (annotation_id) REFERENCES annotations(id) ON DELETE CASCADE
 );
@@ -59,7 +60,16 @@ class AnnotationDB:
         self._conn.execute("PRAGMA foreign_keys = ON")
         self._conn.execute("PRAGMA journal_mode = WAL")
         self._conn.executescript(_SCHEMA)
+        self._migrate()
         self._conn.commit()
+
+    def _migrate(self) -> None:
+        """Additive schema migrations for databases created by older versions."""
+        cols = {row[1] for row in self._conn.execute("PRAGMA table_info(region_points)")}
+        if "ring" not in cols:
+            self._conn.execute(
+                "ALTER TABLE region_points ADD COLUMN ring INTEGER NOT NULL DEFAULT 0"
+            )
 
     # ------------------------------------------------------------------
     def save_all(self, store: AnnotationStore, slide_name: str) -> int:
@@ -91,9 +101,16 @@ class AnnotationDB:
                         None,
                     ),
                 )
+                rows = []
+                seq = 0
+                for ring_idx, ring in enumerate([ann.points, *ann.holes]):
+                    for p in ring:
+                        rows.append((ann.id, seq, p[0], p[1], ring_idx))
+                        seq += 1
                 cur.executemany(
-                    "INSERT INTO region_points (annotation_id, seq, px, py) VALUES (?,?,?,?)",
-                    [(ann.id, i, p[0], p[1]) for i, p in enumerate(ann.points)],
+                    "INSERT INTO region_points (annotation_id, seq, px, py, ring) "
+                    "VALUES (?,?,?,?,?)",
+                    rows,
                 )
             elif isinstance(ann, CellMarker):
                 cur.execute(
@@ -195,13 +212,20 @@ class AnnotationDB:
                 )
             elif ann_type == "region":
                 pts = self._conn.execute(
-                    "SELECT px, py FROM region_points WHERE annotation_id = ? ORDER BY seq",
+                    "SELECT px, py, ring FROM region_points "
+                    "WHERE annotation_id = ? ORDER BY ring, seq",
                     (ann_id,),
                 ).fetchall()
+                rings: dict[int, list[tuple[float, float]]] = {}
+                for px, py, ring in pts:
+                    rings.setdefault(ring or 0, []).append((px, py))
+                outer = rings.pop(0, [])
+                holes = [rings[k] for k in sorted(rings)]
                 ann = RegionAnnotation(
                     id=ann_id,
-                    points=[(p[0], p[1]) for p in pts],
+                    points=outer,
                     channel=biomarker,
+                    holes=holes,
                     **meta,
                 )
             else:

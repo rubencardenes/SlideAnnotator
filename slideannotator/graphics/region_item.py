@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from PySide6.QtGui import QBrush, QColor, QPen
-from PySide6.QtWidgets import QGraphicsPolygonItem
+from PySide6.QtWidgets import QGraphicsPathItem
+
+from ..utils.geometry import region_path
 
 
-class RegionItem(QGraphicsPolygonItem):
-    """Closed polygon region annotation."""
+class RegionItem(QGraphicsPathItem):
+    """Closed polygon region annotation, optionally with holes (even-odd fill)."""
 
     def __init__(self, ann_id: str, color: QColor, fill_opacity: float = 40 / 255) -> None:
         super().__init__()
@@ -19,6 +21,13 @@ class RegionItem(QGraphicsPolygonItem):
     @property
     def ann_id(self) -> str:
         return self._ann_id
+
+    def set_geometry(
+        self,
+        points: list[tuple[float, float]],
+        holes: list[list[tuple[float, float]]] | None = None,
+    ) -> None:
+        self.setPath(region_path(points, holes))
 
     def set_fill_opacity(self, opacity: float) -> None:
         self._fill_opacity = max(0.0, min(1.0, opacity))

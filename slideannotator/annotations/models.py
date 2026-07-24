@@ -46,6 +46,7 @@ class RegionAnnotation:
     id: str
     points: list[tuple[float, float]]
     channel: str
+    holes: list[list[tuple[float, float]]] = field(default_factory=list)
     color: tuple[int, int, int] = field(default_factory=lambda: (255, 255, 255))
     created_at: str = field(default_factory=_now_iso)
     modified_at: str = field(default_factory=_now_iso)
@@ -54,8 +55,17 @@ class RegionAnnotation:
     type: str = "region"
 
     @staticmethod
-    def create(points: list[tuple[float, float]], channel: str) -> RegionAnnotation:
-        return RegionAnnotation(id=str(uuid.uuid4()), points=list(points), channel=channel)
+    def create(
+        points: list[tuple[float, float]],
+        channel: str,
+        holes: list[list[tuple[float, float]]] | None = None,
+    ) -> RegionAnnotation:
+        return RegionAnnotation(
+            id=str(uuid.uuid4()),
+            points=list(points),
+            channel=channel,
+            holes=[list(h) for h in (holes or [])],
+        )
 
 
 @dataclass
@@ -83,7 +93,7 @@ class FOVAnnotation:
 def _snapshot_ann(ann: CellMarker | RegionAnnotation | FOVAnnotation):
     """Return a copy of an annotation for undo history."""
     if isinstance(ann, RegionAnnotation):
-        return replace(ann, points=list(ann.points))
+        return replace(ann, points=list(ann.points), holes=[list(h) for h in ann.holes])
     return replace(ann)
 
 
@@ -115,8 +125,13 @@ class AnnotationStore(QObject):
             self._push_undo(lambda aid=m.id: self.delete(aid), lambda s=snap: self._restore(s))
         return m
 
-    def add_region(self, points: list[tuple[float, float]], channel: str) -> RegionAnnotation:
-        r = RegionAnnotation.create(points, channel)
+    def add_region(
+        self,
+        points: list[tuple[float, float]],
+        channel: str,
+        holes: list[list[tuple[float, float]]] | None = None,
+    ) -> RegionAnnotation:
+        r = RegionAnnotation.create(points, channel, holes)
         self._regions[r.id] = r
         self.is_dirty = True
         self.annotation_added.emit(r.id)
@@ -193,11 +208,22 @@ class AnnotationStore(QObject):
     def get_region(self, ann_id: str) -> RegionAnnotation | None:
         return self._regions.get(ann_id)
 
-    def set_region_points(self, ann_id: str, points: list[tuple[float, float]]) -> None:
+    def set_region_geometry(
+        self,
+        ann_id: str,
+        points: list[tuple[float, float]],
+        holes: list[list[tuple[float, float]]] | None = None,
+    ) -> None:
         if ann_id in self._regions:
-            self._regions[ann_id].points = list(points)
+            r = self._regions[ann_id]
+            r.points = list(points)
+            r.holes = [list(h) for h in (holes if holes is not None else r.holes)]
             self.is_dirty = True
             self.annotation_moved.emit(ann_id)
+
+    def set_region_points(self, ann_id: str, points: list[tuple[float, float]]) -> None:
+        # Backward-compatible helper: replaces the outer ring, preserves holes.
+        self.set_region_geometry(ann_id, points)
 
     def move_fov(self, ann_id: str, x: float, y: float) -> None:
         if ann_id in self._fovs:
@@ -267,6 +293,70 @@ class AnnotationStore(QObject):
             lambda ss=snapshots: [self._restore(s) for s in ss],
         )
         return regions
+
+    def merge_regions(self, groups: list[dict]) -> list[RegionAnnotation]:
+        """Replace each group's regions with a single merged region (one undo step).
+
+        Each group: {"remove_ids": [...], "points": [...], "holes": [...],
+        "channel": str, "color": (r,g,b)}.
+        """
+        groups = [g for g in groups if g.get("remove_ids") and g.get("points")]
+        if not groups:
+            return []
+        removed_snaps: list = []
+        created: list[RegionAnnotation] = []
+        self._is_undoing = True
+        try:
+            for g in groups:
+                for aid in g["remove_ids"]:
+                    ann = self._regions.get(aid)
+                    if ann is not None:
+                        removed_snaps.append(_snapshot_ann(ann))
+                    self.delete(aid)
+                r = RegionAnnotation.create(g["points"], g["channel"], g.get("holes"))
+                r.color = tuple(g.get("color", (255, 255, 255)))
+                self._regions[r.id] = r
+                self.is_dirty = True
+                self.annotation_added.emit(r.id)
+                created.append(r)
+        finally:
+            self._is_undoing = False
+        created_snaps = [_snapshot_ann(r) for r in created]
+        created_ids = [r.id for r in created]
+
+        def _undo() -> None:
+            for aid in created_ids:
+                self.delete(aid)
+            for s in removed_snaps:
+                self._restore(s)
+
+        def _redo() -> None:
+            for s in removed_snaps:
+                self.delete(s.id)
+            for s in created_snaps:
+                self._restore(s)
+
+        self._push_undo(_undo, _redo)
+        return created
+
+    def apply_region_holes(
+        self, updates: list[tuple[str, list[tuple[float, float]], list[list[tuple[float, float]]]]]
+    ) -> None:
+        """Apply new (points, holes) geometry to several regions as one undo step."""
+        updates = [u for u in updates if u[0] in self._regions]
+        if not updates:
+            return
+        old_state: list[tuple] = []
+        for aid, _pts, _holes in updates:
+            r = self._regions[aid]
+            old_state.append((aid, list(r.points), [list(h) for h in r.holes]))
+        new_state = [(aid, list(pts), [list(h) for h in holes]) for aid, pts, holes in updates]
+        for aid, pts, holes in new_state:
+            self.set_region_geometry(aid, pts, holes)
+        self._push_undo(
+            lambda old=old_state: [self.set_region_geometry(a, p, h) for a, p, h in old],
+            lambda new=new_state: [self.set_region_geometry(a, p, h) for a, p, h in new],
+        )
 
     def add_marker_batch(
         self, markers_data: list[tuple[float, float, str, float, float]]
@@ -344,7 +434,11 @@ class AnnotationStore(QObject):
             elif kind == "region":
                 ann = self._regions.get(ann_id)
                 if ann is not None:
-                    new_state[ann_id] = ("region", list(ann.points))
+                    new_state[ann_id] = (
+                        "region",
+                        list(ann.points),
+                        [list(h) for h in ann.holes],
+                    )
         if not new_state:
             return
         if not any(originals.get(aid) != new_state.get(aid) for aid in new_state):
@@ -417,4 +511,5 @@ class AnnotationStore(QObject):
         elif kind == "fov":
             self.move_fov(ann_id, state[1], state[2])
         elif kind == "region":
-            self.set_region_points(ann_id, state[1])
+            holes = state[2] if len(state) > 2 else None
+            self.set_region_geometry(ann_id, state[1], holes)
