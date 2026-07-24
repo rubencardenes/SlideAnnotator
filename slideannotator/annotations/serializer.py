@@ -281,8 +281,10 @@ def export_region_annot(
     FOVs/.  Returns (saved_count, error_count).
     When *selected_channels* is provided only those channels are exported.
     """
-    from PySide6.QtCore import QPointF, Qt
-    from PySide6.QtGui import QBrush, QImage, QPainter, QPolygonF
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QBrush, QImage, QPainter
+
+    from ..utils.geometry import region_path
 
     stem = slide_name
     annot_dir = output_dir / "Region Annotations" / "Annot"
@@ -344,8 +346,12 @@ def export_region_annot(
                 painter.setBrush(QBrush(Qt.GlobalColor.white))
                 painter.setPen(Qt.PenStyle.NoPen)
                 for region in overlapping:
-                    poly = QPolygonF([QPointF(p[0] - fx, p[1] - fy) for p in region.points])
-                    painter.drawPolygon(poly)
+                    shifted_outer = [(p[0] - fx, p[1] - fy) for p in region.points]
+                    shifted_holes = [
+                        [(p[0] - fx, p[1] - fy) for p in ring] for ring in region.holes
+                    ]
+                    # Even-odd path cuts holes out of the filled mask automatically.
+                    painter.drawPath(region_path(shifted_outer, shifted_holes))
                 painter.end()
                 mask_img.copy().save(str(mask_path), "PNG")
                 saved += 1
@@ -355,7 +361,12 @@ def export_region_annot(
     if store.regions:
         regions_json_path = annot_dir / f"{stem}_regions.json"
         regions_data = [
-            {"id": r.id, "channel": r.channel, "points": [[p[0], p[1]] for p in r.points]}
+            {
+                "id": r.id,
+                "channel": r.channel,
+                "points": [[p[0], p[1]] for p in r.points],
+                "holes": [[[p[0], p[1]] for p in ring] for ring in r.holes],
+            }
             for r in store.regions.values()
         ]
         regions_json_path.write_text(json.dumps(regions_data, indent=2))
@@ -440,7 +451,8 @@ def load_structured(output_dir: Path, slide_path: Path, store: AnnotationStore) 
                 regions_data = json.loads(regions_json_path.read_text())
                 for entry in regions_data:
                     points = [tuple(p) for p in entry["points"]]
-                    store.add_region(points, entry["channel"])
+                    holes = [[tuple(p) for p in ring] for ring in entry.get("holes", [])]
+                    store.add_region(points, entry["channel"], holes)
                     region_count += 1
             except Exception:
                 pass

@@ -188,7 +188,7 @@ class ShiftSelectMixin:
                 continue
             r = self._store.get_region(ann_id)
             if r is not None:
-                originals[ann_id] = ("region", list(r.points))
+                originals[ann_id] = ("region", list(r.points), [list(h) for h in r.holes])
         return originals
 
     def _sx_apply_move(self, ann_id: str, orig: tuple, delta: QPointF) -> None:
@@ -198,5 +198,8 @@ class ShiftSelectMixin:
         elif kind == "fov":
             self._store.move_fov(ann_id, orig[1] + delta.x(), orig[2] + delta.y())
         elif kind == "region":
-            new_pts = [(x + delta.x(), y + delta.y()) for x, y in orig[1]]
-            self._store.set_region_points(ann_id, new_pts)
+            dx, dy = delta.x(), delta.y()
+            new_pts = [(x + dx, y + dy) for x, y in orig[1]]
+            orig_holes = orig[2] if len(orig) > 2 else []
+            new_holes = [[(x + dx, y + dy) for x, y in ring] for ring in orig_holes]
+            self._store.set_region_geometry(ann_id, new_pts, new_holes)

@@ -36,9 +36,11 @@ from ..settings import get_settings, save_settings
 from ..tiles.tile_cache import LRUCache
 from ..tiles.tile_manager import TileManager
 from ..tools.cell_marker_tool import CellMarkerTool
+from ..tools.hole_tool import HoleTool
 from ..tools.pan_tool import PanTool
 from ..tools.region_tool import RegionTool
 from ..tools.select_tool import SelectTool
+from ..utils.geometry import connected_components, path_to_rings, region_path, split_outer_holes
 from ..utils.groups import TEST, TRAIN, scan_slide_files, scan_slide_groups
 from ..viewsettings import load_view_settings, save_view_settings
 from .agent_panel import AgentPanel
@@ -114,6 +116,7 @@ class MainWindow(QMainWindow):
         self._toolbar.redo_requested.connect(self._redo)
         self._toolbar.stardist_settings_requested.connect(self._show_stardist_settings)
         self._toolbar.region_opacity_changed.connect(self._on_region_opacity_changed)
+        self._toolbar.merge_regions_requested.connect(self._merge_regions)
         self.addToolBar(self._toolbar)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -304,6 +307,7 @@ class MainWindow(QMainWindow):
                 "pan": PanTool(scene, self._store),
                 "cell_marker": CellMarkerTool(scene, self._store, self._view),
                 "region": RegionTool(scene, self._store, self._view),
+                "region_hole": HoleTool(scene, self._store, self._view),
                 "select": SelectTool(scene, self._store, self._view),
             }
             for tool in self._tools.values():
@@ -781,6 +785,49 @@ class MainWindow(QMainWindow):
             vr = self._view.mapToScene(self._view.viewport().rect()).boundingRect()
             zoom = self._view.current_zoom()
             scene.update_viewport(vr, zoom)
+
+    def _merge_regions(self) -> None:
+        if self._store is None:
+            return
+        regions = [r for r in self._store.regions.values() if r.channel == self._active_channel]
+        if len(regions) < 2:
+            QMessageBox.information(
+                self,
+                "Nothing to Merge",
+                "Need at least two region annotations on the active channel to merge.",
+            )
+            return
+        paths = [region_path(r.points, r.holes) for r in regions]
+        groups = connected_components(paths)
+        merges: list[dict] = []
+        for group in groups:
+            if len(group) < 2:
+                continue
+            merged = paths[group[0]]
+            for idx in group[1:]:
+                merged = merged.united(paths[idx])
+            outer, holes = split_outer_holes(path_to_rings(merged))
+            if not outer:
+                continue
+            first = regions[group[0]]
+            merges.append(
+                {
+                    "remove_ids": [regions[i].id for i in group],
+                    "points": outer,
+                    "holes": holes,
+                    "channel": first.channel,
+                    "color": first.color,
+                }
+            )
+        if not merges:
+            QMessageBox.information(
+                self,
+                "Nothing to Merge",
+                "No touching or overlapping regions found on the active channel.",
+            )
+            return
+        self._store.merge_regions(merges)
+        self._update_undo_redo_state()
 
     def _on_region_opacity_changed(self, opacity: float) -> None:
         scene = self._view.scene()

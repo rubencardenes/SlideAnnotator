@@ -241,10 +241,7 @@ class SlideScene(QGraphicsScene):
     def _add_region_item(self, ann: RegionAnnotation) -> None:
         color = self._channel_color(ann.channel)
         item = RegionItem(ann.id, color, fill_opacity=self._region_fill_opacity)
-        polygon = QPolygonF()
-        for x, y in ann.points:
-            polygon.append(QPointF(x, y))
-        item.setPolygon(polygon)
+        item.set_geometry(ann.points, ann.holes)
         item.setVisible(self._channel_visible(ann.channel))
         self._region_items[ann.id] = item
         self.addItem(item)
@@ -273,10 +270,7 @@ class SlideScene(QGraphicsScene):
             return
         region = self._store.get_region(ann_id)
         if region and ann_id in self._region_items:
-            polygon = QPolygonF()
-            for x, y in region.points:
-                polygon.append(QPointF(x, y))
-            self._region_items[ann_id].setPolygon(polygon)
+            self._region_items[ann_id].set_geometry(region.points, region.holes)
 
     def _on_selection_changed(self, selected: object) -> None:
         selected_set = set(selected) if selected else set()

@@ -93,6 +93,55 @@ def _icon_region(size: int = _ICON_SZ) -> QIcon:
     return QIcon(pix)
 
 
+def _icon_region_hole(size: int = _ICON_SZ) -> QIcon:
+    """Region polygon with a punched-out hole (even-odd fill)."""
+    pix = QPixmap(size, size)
+    pix.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pix)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    c = size / 2.0
+    n, r = 5, size * 0.42
+    pen = QPen(QColor(255, 155, 35), size * 0.10)
+    pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+    p.setPen(pen)
+    p.setBrush(QColor(255, 155, 35, 60))
+    path = QPainterPath()
+    for i in range(n):
+        a = math.radians(-90 + i * 360.0 / n)
+        x, y = c + r * math.cos(a), c + r * math.sin(a)
+        path.moveTo(x, y) if i == 0 else path.lineTo(x, y)
+    path.closeSubpath()
+    # Punch a hole via even-odd fill.
+    path.setFillRule(Qt.FillRule.OddEvenFill)
+    path.addEllipse(QPointF(c, c), size * 0.15, size * 0.15)
+    p.drawPath(path)
+    p.end()
+    return QIcon(pix)
+
+
+def _icon_merge(size: int = _ICON_SZ) -> QIcon:
+    """Two overlapping blobs unioned into one — region merge."""
+    pix = QPixmap(size, size)
+    pix.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pix)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    c = size / 2.0
+    color = QColor(255, 155, 35)
+    left = QPainterPath()
+    left.addEllipse(QPointF(c - size * 0.16, c), size * 0.26, size * 0.26)
+    right = QPainterPath()
+    right.addEllipse(QPointF(c + size * 0.16, c), size * 0.26, size * 0.26)
+    merged = left.united(right)
+    pen = QPen(color, size * 0.10)
+    pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+    p.setPen(pen)
+    p.setBrush(QColor(255, 155, 35, 55))
+    p.drawPath(merged)
+    p.end()
+    return QIcon(pix)
+
+
 def _icon_select(size: int = _ICON_SZ) -> QIcon:
     pix = QPixmap(size, size)
     pix.fill(Qt.GlobalColor.transparent)
@@ -559,6 +608,7 @@ class AnnotationToolbar(QToolBar):
     annotations_toggled = Signal(bool)
     marker_box_toggled = Signal(bool)
     region_opacity_changed = Signal(float)
+    merge_regions_requested = Signal()
     save_requested = Signal()
     load_requested = Signal()
     summary_requested = Signal()
@@ -586,9 +636,17 @@ class AnnotationToolbar(QToolBar):
         self._pan_btn = _make_tool_btn(_icon_pan(), "Pan  [right-click drag in any mode]")
         self._marker_btn = _make_tool_btn(_icon_marker(), "Cell Marker: click to place")
         self._region_btn = _make_tool_btn(_icon_region(), "Region: drag to draw freehand")
+        self._hole_btn = _make_tool_btn(
+            _icon_region_hole(), "Hole: drag a loop inside a region to punch a hole"
+        )
         self._select_btn = _make_tool_btn(
             _icon_select(), "Select: click/drag to move · D to delete"
         )
+        self._merge_btn = _make_tool_btn(
+            _icon_merge(), "Merge touching regions on the active channel", checkable=False
+        )
+        self._merge_btn.setEnabled(False)
+        self._merge_btn.clicked.connect(self.merge_regions_requested)
         self._eye_btn = _make_tool_btn(_icon_eye(), "Toggle annotations [Space]", checkable=True)
         self._eye_btn.setChecked(True)
         self._box_btn = _make_tool_btn(
@@ -603,7 +661,14 @@ class AnnotationToolbar(QToolBar):
         self._undo_btn.clicked.connect(self.undo_requested)
         self._redo_btn.clicked.connect(self.redo_requested)
 
-        for btn in (self._pan_btn, self._marker_btn, self._region_btn, self._select_btn):
+        for btn in (
+            self._pan_btn,
+            self._marker_btn,
+            self._region_btn,
+            self._hole_btn,
+            self._select_btn,
+            self._merge_btn,
+        ):
             self.addWidget(btn)
 
         self.addSeparator()
@@ -650,6 +715,7 @@ class AnnotationToolbar(QToolBar):
             "pan": self._pan_btn,
             "cell_marker": self._marker_btn,
             "region": self._region_btn,
+            "region_hole": self._hole_btn,
             "select": self._select_btn,
         }
         for name, btn in self._tool_buttons.items():
@@ -750,6 +816,7 @@ class AnnotationToolbar(QToolBar):
     def set_save_load_enabled(self, enabled: bool) -> None:
         self._save_btn.setEnabled(enabled)
         self._load_btn.setEnabled(enabled)
+        self._merge_btn.setEnabled(enabled)
         self._image_props_btn.setEnabled(enabled)
         self._stardist_run_btn.setEnabled(enabled)
         self._stardist_toggle_btn.setEnabled(enabled)
