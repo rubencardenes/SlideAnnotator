@@ -77,6 +77,63 @@ def _save_fov_rgb16(
         return False
 
 
+def sync_fovs_folder(
+    output_dir: Path,
+    slide_name: str,
+    store: AnnotationStore,
+    reader: Any | None = None,
+) -> tuple[int, int, int]:
+    """Keep '<output_dir>/FOVs' in sync with the FOV rows of *slide_name*.
+
+    Writes a PNG for every FOV in *store* that doesn't already have one, and
+    removes any existing PNG for *slide_name* whose FOV is no longer in
+    *store*. Filenames follow ``{slide_name}_{channel}_{x}_{y}.png``, matching
+    the existing export naming scheme. Returns (written, deleted, error_count).
+    """
+    fovs_dir = output_dir / "FOVs"
+    fovs_dir.mkdir(parents=True, exist_ok=True)
+
+    ch_index: dict[str, int] = (
+        {ch.name: i for i, ch in enumerate(reader.channels)} if reader else {}
+    )
+    dapi_ch_idx = _find_dapi_channel(reader) if reader else None
+
+    expected = {
+        f"{slide_name}_{fov.channel}_{int(round(fov.x))}_{int(round(fov.y))}.png": fov
+        for fov in store.fovs.values()
+    }
+
+    written = errors = 0
+    if reader is not None:
+        for name, fov in expected.items():
+            path = fovs_dir / name
+            if path.exists():
+                continue
+            ch_idx = ch_index.get(fov.channel)
+            if ch_idx is None:
+                continue
+            ok = _save_fov_rgb16(
+                path,
+                reader,
+                ch_idx,
+                dapi_ch_idx,
+                int(fov.x),
+                int(fov.y),
+                int(fov.w),
+                int(fov.h),
+            )
+            written += ok
+            errors += not ok
+
+    deleted = 0
+    for existing in fovs_dir.glob(f"{slide_name}_*.png"):
+        if existing.name not in expected:
+            existing.unlink()
+            deleted += 1
+
+    return written, deleted, errors
+
+
 def export_cell_marker_annot(
     output_dir: Path,
     slide_name: str,

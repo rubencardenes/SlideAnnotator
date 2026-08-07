@@ -21,6 +21,7 @@ from ..annotations.serializer import (
     export_region_annot,
     needs_cell_marker_fovs,
     needs_region_fovs,
+    sync_fovs_folder,
 )
 from ..compositing.compositor import ChannelSettings
 from ..graphics.slide_scene import SlideScene
@@ -36,6 +37,7 @@ from ..settings import get_settings, save_settings
 from ..tiles.tile_cache import LRUCache
 from ..tiles.tile_manager import TileManager
 from ..tools.cell_marker_tool import CellMarkerTool
+from ..tools.fov_tool import FovTool
 from ..tools.hole_tool import HoleTool
 from ..tools.pan_tool import PanTool
 from ..tools.region_tool import RegionTool
@@ -306,6 +308,7 @@ class MainWindow(QMainWindow):
             self._tools = {
                 "pan": PanTool(scene, self._store),
                 "cell_marker": CellMarkerTool(scene, self._store, self._view),
+                "fov": FovTool(scene, self._store, self._view),
                 "region": RegionTool(scene, self._store, self._view),
                 "region_hole": HoleTool(scene, self._store, self._view),
                 "select": SelectTool(scene, self._store, self._view),
@@ -441,9 +444,15 @@ class MainWindow(QMainWindow):
             len(self._store.regions),
             len(self._store.fovs),
         )
-        QMessageBox.information(
-            self, "Annotations Saved", f"Saved {count} annotation(s) to database."
+        written, deleted, fov_errors = sync_fovs_folder(
+            get_settings().annotations_dir, slide_name, self._store, self._reader
         )
+        msg = f"Saved {count} annotation(s) to database."
+        if written or deleted:
+            msg += f"\nFOVs folder: {written} image(s) added, {deleted} removed."
+        if fov_errors:
+            msg += f"\n({fov_errors} FOV image error(s))"
+        QMessageBox.information(self, "Annotations Saved", msg)
 
     def _load_from_db(self) -> None:
         if self._store is None or self._slide_path is None:
