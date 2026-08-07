@@ -2,6 +2,22 @@
 
 <!-- version list -->
 
+## v1.11.0 (2026-08-07)
+
+### Code Style
+
+- **review_window**: Fixed ruff format
+  ([`978b0e1`](https://github.com/rubencardenes/SlideAnnotator/commit/978b0e14a966723ef5c88a69102bb1b9fd7139f8))
+
+### Features
+
+- **fov-tool**: Add FOV placement tool and sync FOVs folder on save
+  ([`cd262f4`](https://github.com/rubencardenes/SlideAnnotator/commit/cd262f455150eeb3c6c309bd9460cc32aefc9b08))
+
+- **review-window**: Channel-max slider bounds, train/test filter, marker edit
+  ([`db169ad`](https://github.com/rubencardenes/SlideAnnotator/commit/db169ad67ecd9ad61997019ae3de5a1435796315))
+
+
 ## v1.10.0 (2026-07-24)
 
 ### Documentation
