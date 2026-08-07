@@ -142,6 +142,24 @@ def _icon_merge(size: int = _ICON_SZ) -> QIcon:
     return QIcon(pix)
 
 
+def _icon_fov(size: int = _ICON_SZ) -> QIcon:
+    """Orange square — place a fixed-size FOV rectangle."""
+    pix = QPixmap(size, size)
+    pix.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pix)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    c = size / 2.0
+    color = QColor(255, 155, 35)
+    sz = size * 0.58
+    pen = QPen(color, size * 0.10)
+    pen.setJoinStyle(Qt.PenJoinStyle.MiterJoin)
+    p.setPen(pen)
+    p.setBrush(QColor(255, 155, 35, 45))
+    p.drawRect(QRectF(c - sz / 2, c - sz / 2, sz, sz))
+    p.end()
+    return QIcon(pix)
+
+
 def _icon_select(size: int = _ICON_SZ) -> QIcon:
     pix = QPixmap(size, size)
     pix.fill(Qt.GlobalColor.transparent)
@@ -171,7 +189,7 @@ def _icon_eye(size: int = _ICON_SZ) -> QIcon:
     p = QPainter(pix)
     p.setRenderHint(QPainter.RenderHint.Antialiasing)
     c = size / 2.0
-    color = QColor(20, 220, 195)
+    color = QColor(255, 155, 35)
     pen = QPen(color, size * 0.10)
     pen.setCapStyle(Qt.PenCapStyle.RoundCap)
     p.setPen(pen)
@@ -183,7 +201,7 @@ def _icon_eye(size: int = _ICON_SZ) -> QIcon:
     path.cubicTo(c + rx * 0.4, c + ry * 2.2, c - rx * 0.4, c + ry * 2.2, c - rx, c)
     p.drawPath(path)
     p.setPen(QPen(color, size * 0.07))
-    p.setBrush(QColor(20, 220, 195, 70))
+    p.setBrush(QColor(255, 155, 35, 70))
     p.drawEllipse(QPointF(c, c), size * 0.16, size * 0.16)
     p.setPen(Qt.PenStyle.NoPen)
     p.setBrush(color)
@@ -394,13 +412,13 @@ def _icon_stardist_run(size: int = _ICON_SZ) -> QIcon:
 
 
 def _icon_stardist_toggle(size: int = _ICON_SZ) -> QIcon:
-    """Eye icon in orange — toggle StarDist polygon visibility."""
+    """Eye icon in green — toggle StarDist polygon visibility."""
     pix = QPixmap(size, size)
     pix.fill(Qt.GlobalColor.transparent)
     p = QPainter(pix)
     p.setRenderHint(QPainter.RenderHint.Antialiasing)
     c = size / 2.0
-    color = QColor(255, 165, 30)
+    color = QColor(55, 215, 100)
     pen = QPen(color, size * 0.10)
     pen.setCapStyle(Qt.PenCapStyle.RoundCap)
     p.setPen(pen)
@@ -412,7 +430,7 @@ def _icon_stardist_toggle(size: int = _ICON_SZ) -> QIcon:
     path.cubicTo(c + rx * 0.4, c + ry * 2.2, c - rx * 0.4, c + ry * 2.2, c - rx, c)
     p.drawPath(path)
     p.setPen(QPen(color, size * 0.07))
-    p.setBrush(QColor(255, 165, 30, 70))
+    p.setBrush(QColor(55, 215, 100, 70))
     p.drawEllipse(QPointF(c, c), size * 0.16, size * 0.16)
     p.setPen(Qt.PenStyle.NoPen)
     p.setBrush(color)
@@ -642,6 +660,7 @@ class AnnotationToolbar(QToolBar):
         self._select_btn = _make_tool_btn(
             _icon_select(), "Select: click/drag to move · D to delete"
         )
+        self._fov_btn = _make_tool_btn(_icon_fov(), "FOV: click to place  [F]")
         self._merge_btn = _make_tool_btn(
             _icon_merge(), "Merge touching regions on the active channel", checkable=False
         )
@@ -663,10 +682,11 @@ class AnnotationToolbar(QToolBar):
 
         for btn in (
             self._pan_btn,
+            self._select_btn,
             self._marker_btn,
+            self._fov_btn,
             self._region_btn,
             self._hole_btn,
-            self._select_btn,
             self._merge_btn,
         ):
             self.addWidget(btn)
@@ -714,6 +734,7 @@ class AnnotationToolbar(QToolBar):
         self._tool_buttons = {
             "pan": self._pan_btn,
             "cell_marker": self._marker_btn,
+            "fov": self._fov_btn,
             "region": self._region_btn,
             "region_hole": self._hole_btn,
             "select": self._select_btn,
@@ -749,7 +770,7 @@ class AnnotationToolbar(QToolBar):
             _icon_stardist_run(), "Run StarDist on FOVs", checkable=False
         )
         self._stardist_toggle_btn = _make_tool_btn(
-            _icon_stardist_toggle(), "Toggle StarDist nuclei [orange eye]", checkable=True
+            _icon_stardist_toggle(), "Toggle StarDist nuclei [green eye]", checkable=True
         )
         self._stardist_settings_btn = _make_tool_btn(
             _icon_stardist_settings(), "Settings", checkable=False
