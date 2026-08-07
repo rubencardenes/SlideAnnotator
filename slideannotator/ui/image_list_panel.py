@@ -64,6 +64,13 @@ class ImageListPanel(QWidget):
         self._test_list = self._make_list()
         layout.addWidget(self._test_list)
 
+        self._train_list.itemSelectionChanged.connect(
+            lambda: self._on_selection_changed(self._train_list, self._test_list)
+        )
+        self._test_list.itemSelectionChanged.connect(
+            lambda: self._on_selection_changed(self._test_list, self._train_list)
+        )
+
         self._layout = layout
 
     def _make_section_header(self, text: str) -> QLabel:
@@ -149,6 +156,10 @@ class ImageListPanel(QWidget):
             item.setSizeHint(widget.sizeHint())
             list_widget.addItem(item)
             list_widget.setItemWidget(item, widget)
+
+    def _on_selection_changed(self, source: QListWidget, other: QListWidget) -> None:
+        if source.selectedItems() and other.selectedItems():
+            other.clearSelection()
 
     def _on_double_click(self, item: QListWidgetItem) -> None:
         path = item.data(Qt.ItemDataRole.UserRole)

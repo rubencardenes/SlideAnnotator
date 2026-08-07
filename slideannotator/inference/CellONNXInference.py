@@ -295,7 +295,7 @@ def create_cell_detector(
     """Build the cell-detection inference wrapper matching an ONNX model.
 
     Dispatches on the model's input/output signature so different exported
-    detectors work interchangeably from ``settings.cell_det_model``:
+    detectors work interchangeably from ``settings.cell_det_models``:
 
       * RF-DETR — a single ``input`` and ``dets`` + ``labels`` outputs.
       * D-FINE / RT-DETR — ``images`` + ``orig_target_sizes`` inputs and

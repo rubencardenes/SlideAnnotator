@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QAbstractItemView,
     QButtonGroup,
     QCheckBox,
+    QComboBox,
     QDialog,
     QDialogButtonBox,
     QDoubleSpinBox,
@@ -28,6 +29,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..inference.evaluation import EvaluationResult, precision_recall_f1
+from ..settings import CellDetModelConfig
 
 _DIALOG_STYLE = (
     "QDialog { background: #1e1e1e; }"
@@ -166,6 +168,7 @@ class EvaluationSelectionDialog(QDialog):
         images: list[str],
         seg_available: bool = False,
         default_iou: float = 0.3,
+        cell_det_models: list[CellDetModelConfig] | None = None,
         image_groups: dict[str, set[str]] | None = None,
         marker_groups: dict[str, set[str]] | None = None,
         default_group: str = "test",
@@ -215,6 +218,22 @@ class EvaluationSelectionDialog(QDialog):
         sep.setFrameShape(QFrame.Shape.HLine)
         sep.setStyleSheet("color: #3a3a3a;")
         layout.addWidget(sep)
+
+        # Cell detection model — populated from the registered models list.
+        self._cell_det_models = cell_det_models or []
+        model_row = QHBoxLayout()
+        model_row.addWidget(QLabel("Model:"))
+        self._model_combo = QComboBox()
+        for model in self._cell_det_models:
+            self._model_combo.addItem(model.name)
+        default_idx = next((i for i, m in enumerate(self._cell_det_models) if m.default), 0)
+        if self._cell_det_models:
+            self._model_combo.setCurrentIndex(default_idx)
+        else:
+            self._model_combo.setEnabled(False)
+            self._model_combo.addItem("(none registered)")
+        model_row.addWidget(self._model_combo, 1)
+        layout.addLayout(model_row)
 
         # Task type — segmentation is disabled until a seg model is configured.
         task_row = QHBoxLayout()
@@ -288,6 +307,12 @@ class EvaluationSelectionDialog(QDialog):
 
     def task_type(self) -> str:
         return "segmentation" if self._segmentation_radio.isChecked() else "detection"
+
+    def selected_model(self) -> CellDetModelConfig | None:
+        idx = self._model_combo.currentIndex()
+        if 0 <= idx < len(self._cell_det_models):
+            return self._cell_det_models[idx]
+        return None
 
 
 class EvaluationResultsDialog(QDialog):
