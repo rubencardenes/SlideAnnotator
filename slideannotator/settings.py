@@ -16,13 +16,30 @@ _DEFAULTS = {
 
 
 @dataclass
+class CellDetModelConfig:
+    """A registered cell-detection model.
+
+    ``default`` marks the model used when none is explicitly selected (e.g. for
+    interactive cell detection, or as the pre-selected choice in the evaluation
+    dropdown). If no entry is marked default, the first registered model is used.
+    """
+
+    path: Path
+    # Normalization scheme for RF-DETR cell detectors: "imagenet" (0-1 scale +
+    # ImageNet mean/std) or "none" (16-bit 0-1 scale only). Ignored by D-FINE/RT-DETR.
+    norm: str = "imagenet"
+    default: bool = False
+
+    @property
+    def name(self) -> str:
+        return self.path.stem
+
+
+@dataclass
 class Settings:
     annotations_dir: Path = field(default_factory=lambda: Path.home() / "data" / "annotations")
     stardist_model: Path | None = field(default=None)
-    cell_det_model: Path | None = field(default=None)
-    # Normalization scheme for RF-DETR cell detectors: "imagenet" (0-1 scale +
-    # ImageNet mean/std) or "none" (16-bit 0-1 scale only). Ignored by D-FINE/RT-DETR.
-    cell_det_norm: str = field(default="imagenet")
+    cell_det_models: list[CellDetModelConfig] = field(default_factory=list)
     seg_model: Path | None = field(default=None)
     db_path: Path = field(default_factory=lambda: Path("annotations.db"))
     eval_db_path: Path | None = field(default=None)
@@ -39,6 +56,13 @@ class Settings:
             return self.eval_db_path
         return self.db_path.expanduser().parent / "evaluations.db"
 
+    def default_cell_det_model(self) -> CellDetModelConfig | None:
+        """The model flagged ``default``, or the first registered model otherwise."""
+        for model in self.cell_det_models:
+            if model.default:
+                return model
+        return self.cell_det_models[0] if self.cell_det_models else None
+
     @staticmethod
     def from_dict(data: dict) -> Settings:
         s = Settings()
@@ -46,10 +70,24 @@ class Settings:
             s.annotations_dir = Path(data["annotations_dir"]).expanduser()
         if "stardist_model" in data:
             s.stardist_model = Path(data["stardist_model"]).expanduser()
-        if "cell_det_model" in data:
-            s.cell_det_model = Path(data["cell_det_model"]).expanduser()
-        if "cell_det_norm" in data:
-            s.cell_det_norm = str(data["cell_det_norm"])
+        if "cell_det_models" in data:
+            s.cell_det_models = [
+                CellDetModelConfig(
+                    path=Path(m["path"]).expanduser(),
+                    norm=str(m.get("norm", "imagenet")),
+                    default=bool(m.get("default", False)),
+                )
+                for m in data["cell_det_models"]
+            ]
+        elif "cell_det_model" in data:
+            # Legacy single-model schema.
+            s.cell_det_models = [
+                CellDetModelConfig(
+                    path=Path(data["cell_det_model"]).expanduser(),
+                    norm=str(data.get("cell_det_norm", "imagenet")),
+                    default=True,
+                )
+            ]
         if "seg_model" in data:
             s.seg_model = Path(data["seg_model"]).expanduser()
         if "db_path" in data:
@@ -89,7 +127,10 @@ class _SettingsDumper(yaml.Dumper):
 
 
 def _flow_list_representer(dumper: yaml.Dumper, data: list) -> yaml.Node:
-    return dumper.represent_sequence("tag:yaml.org,2002:seq", data, flow_style=True)
+    # Lists of scalars (e.g. fov_size, outline_color) stay compact; lists of
+    # mappings (e.g. cell_det_models) are more readable in block style.
+    flow_style = not any(isinstance(item, dict) for item in data)
+    return dumper.represent_sequence("tag:yaml.org,2002:seq", data, flow_style=flow_style)
 
 
 _SettingsDumper.add_representer(list, _flow_list_representer)
@@ -103,9 +144,11 @@ def save_settings(s: Settings) -> None:
     }
     if s.stardist_model is not None:
         data["stardist_model"] = str(s.stardist_model)
-    if s.cell_det_model is not None:
-        data["cell_det_model"] = str(s.cell_det_model)
-    data["cell_det_norm"] = s.cell_det_norm
+    if s.cell_det_models:
+        data["cell_det_models"] = [
+            {"path": str(m.path), "norm": m.norm, **({"default": True} if m.default else {})}
+            for m in s.cell_det_models
+        ]
     if s.seg_model is not None:
         data["seg_model"] = str(s.seg_model)
     if s.eval_db_path is not None:

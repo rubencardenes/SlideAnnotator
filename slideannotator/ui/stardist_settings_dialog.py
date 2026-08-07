@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
+    QCheckBox,
     QColorDialog,
     QComboBox,
     QDialog,
@@ -22,7 +23,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from slideannotator.settings import Settings
+from slideannotator.settings import CellDetModelConfig, Settings
 
 _STYLE = (
     "QDialog { background: #222; color: #ccc; }"
@@ -50,6 +51,119 @@ _STYLE = (
 )
 
 
+class _CellDetModelRow(QWidget):
+    """One editable row: model path, normalization scheme, and default flag."""
+
+    default_toggled = Signal(object)  # emits self when checked
+    remove_requested = Signal(object)  # emits self
+
+    def __init__(self, model: CellDetModelConfig | None, parent=None) -> None:
+        super().__init__(parent)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+
+        self.path_edit = QLineEdit(str(model.path) if model else "")
+        self.path_edit.setPlaceholderText("Path to .onnx model")
+        browse = QPushButton("Browse…")
+        browse.setFixedWidth(72)
+        browse.clicked.connect(self._browse)
+
+        self.norm_combo = QComboBox()
+        self.norm_combo.addItems(["imagenet", "none"])
+        idx = self.norm_combo.findText(model.norm) if model else -1
+        self.norm_combo.setCurrentIndex(idx if idx >= 0 else 0)
+        self.norm_combo.setToolTip(
+            "RF-DETR normalization: 'imagenet' (0-1 scale + ImageNet mean/std) or "
+            "'none' (16-bit 0-1 scale only). Ignored by D-FINE/RT-DETR."
+        )
+
+        self.default_check = QCheckBox("Default")
+        self.default_check.setChecked(bool(model and model.default))
+        self.default_check.toggled.connect(self._on_default_toggled)
+
+        remove_btn = QPushButton("✕")
+        remove_btn.setFixedWidth(28)
+        remove_btn.setToolTip("Remove model")
+        remove_btn.clicked.connect(lambda: self.remove_requested.emit(self))
+
+        layout.addWidget(self.path_edit, 1)
+        layout.addWidget(browse)
+        layout.addWidget(self.norm_combo)
+        layout.addWidget(self.default_check)
+        layout.addWidget(remove_btn)
+
+    def _browse(self) -> None:
+        start = self.path_edit.text() or str(Path.home())
+        path, _ = QFileDialog.getOpenFileName(self, "Select Model", start, "ONNX models (*.onnx)")
+        if path:
+            self.path_edit.setText(path)
+
+    def _on_default_toggled(self, checked: bool) -> None:
+        if checked:
+            self.default_toggled.emit(self)
+
+    def to_config(self) -> CellDetModelConfig | None:
+        text = self.path_edit.text().strip()
+        if not text:
+            return None
+        return CellDetModelConfig(
+            path=Path(text).expanduser(),
+            norm=self.norm_combo.currentText(),
+            default=self.default_check.isChecked(),
+        )
+
+
+class _CellDetModelsEditor(QWidget):
+    """Add/remove/edit rows for the registered cell-detection models."""
+
+    def __init__(self, models: list[CellDetModelConfig], parent=None) -> None:
+        super().__init__(parent)
+        self._rows: list[_CellDetModelRow] = []
+
+        self._rows_layout = QVBoxLayout()
+        self._rows_layout.setSpacing(4)
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(6)
+        outer.addLayout(self._rows_layout)
+
+        add_btn = QPushButton("+ Add Model")
+        add_btn.clicked.connect(lambda: self._add_row(None))
+        outer.addWidget(add_btn, alignment=Qt.AlignmentFlag.AlignLeft)
+
+        for model in models:
+            self._add_row(model)
+        if not models:
+            self._add_row(None)
+
+    def _add_row(self, model: CellDetModelConfig | None) -> None:
+        row = _CellDetModelRow(model)
+        row.remove_requested.connect(self._remove_row)
+        row.default_toggled.connect(self._on_row_default)
+        self._rows.append(row)
+        self._rows_layout.addWidget(row)
+
+    def _remove_row(self, row: _CellDetModelRow) -> None:
+        if row not in self._rows:
+            return
+        self._rows.remove(row)
+        self._rows_layout.removeWidget(row)
+        row.deleteLater()
+
+    def _on_row_default(self, checked_row: _CellDetModelRow) -> None:
+        for row in self._rows:
+            if row is not checked_row:
+                row.default_check.blockSignals(True)
+                row.default_check.setChecked(False)
+                row.default_check.blockSignals(False)
+
+    def models(self) -> list[CellDetModelConfig]:
+        configs = [row.to_config() for row in self._rows]
+        return [cfg for cfg in configs if cfg is not None]
+
+
 class SettingsDialog(QDialog):
     def __init__(self, settings: Settings, parent=None) -> None:
         super().__init__(parent)
@@ -73,6 +187,7 @@ class SettingsDialog(QDialog):
         inner_layout.addWidget(self._build_paths_group())
         inner_layout.addWidget(self._build_stardist_group())
         inner_layout.addWidget(self._build_regions_group())
+        inner_layout.addWidget(self._build_cell_det_models_group())
         inner_layout.addWidget(self._build_cell_det_group())
         inner_layout.addWidget(self._build_fov_group())
         inner_layout.addStretch()
@@ -118,22 +233,6 @@ class SettingsDialog(QDialog):
             is_dir=False,
             file_filter="ONNX models (*.onnx)",
         )
-        self._cell_det_model_edit = self._path_row(
-            form,
-            "Cell detection model:",
-            str(self._settings.cell_det_model or ""),
-            is_dir=False,
-            file_filter="ONNX models (*.onnx)",
-        )
-        self._cell_det_norm = QComboBox()
-        self._cell_det_norm.addItems(["imagenet", "none"])
-        idx = self._cell_det_norm.findText(self._settings.cell_det_norm)
-        self._cell_det_norm.setCurrentIndex(idx if idx >= 0 else 0)
-        self._cell_det_norm.setToolTip(
-            "RF-DETR normalization: 'imagenet' (0-1 scale + ImageNet mean/std) or "
-            "'none' (16-bit 0-1 scale only). Ignored by D-FINE/RT-DETR."
-        )
-        form.addRow("Cell det. normalization:", self._cell_det_norm)
         return box
 
     def _build_stardist_group(self) -> QGroupBox:
@@ -171,6 +270,15 @@ class SettingsDialog(QDialog):
         self._region_opacity.setFixedWidth(80)
         form.addRow("Fill opacity:", self._region_opacity)
 
+        return box
+
+    def _build_cell_det_models_group(self) -> QGroupBox:
+        box = QGroupBox("Cell Detection Models")
+        layout = QVBoxLayout(box)
+        layout.setSpacing(6)
+
+        self._cell_det_models_editor = _CellDetModelsEditor(self._settings.cell_det_models)
+        layout.addWidget(self._cell_det_models_editor)
         return box
 
     def _build_cell_det_group(self) -> QGroupBox:
@@ -294,9 +402,7 @@ class SettingsDialog(QDialog):
         sd_text = self._stardist_model_edit.text().strip()
         s.stardist_model = Path(sd_text).expanduser() if sd_text else None
 
-        cd_text = self._cell_det_model_edit.text().strip()
-        s.cell_det_model = Path(cd_text).expanduser() if cd_text else None
-        s.cell_det_norm = self._cell_det_norm.currentText()
+        s.cell_det_models = self._cell_det_models_editor.models()
 
         s.outline_color = (
             self._outline_color.red(),

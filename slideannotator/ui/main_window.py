@@ -33,7 +33,7 @@ from ..inference.ONNXInferenceBase import ONNXInferenceBase
 from ..inference.stardist import StarDistONNX
 from ..inference.stardist_worker import StarDistWorker
 from ..readers import open_slide
-from ..settings import get_settings, save_settings
+from ..settings import CellDetModelConfig, get_settings, save_settings
 from ..tiles.tile_cache import LRUCache
 from ..tiles.tile_manager import TileManager
 from ..tools.cell_marker_tool import CellMarkerTool
@@ -77,6 +77,8 @@ class MainWindow(QMainWindow):
         self._stardist_outline_color = None  # persists across image loads
         self._stardist_outline_width = None
         self._cell_det_model: ONNXInferenceBase | None = None
+        self._cell_det_model_path: Path | None = None
+        self._eval_model_name: str | None = None
         self._cell_det_boxes: list[tuple[float, float, float, float]] = []
         self._db: AnnotationDB | None = None
         self._eval_db: EvaluationDB | None = None
@@ -571,6 +573,27 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------------------------
     # Model evaluation
+    def _load_cell_det_model(self, model_cfg: CellDetModelConfig) -> ONNXInferenceBase | None:
+        """Load (or reuse the cached) cell detector for ``model_cfg``."""
+        if not model_cfg.path.exists():
+            QMessageBox.warning(
+                self,
+                "Model Not Found",
+                f"Cell detection model not found:\n{model_cfg.path}\n\n"
+                "Check cell_det_models in settings.yaml.",
+            )
+            return None
+        if self._cell_det_model is None or self._cell_det_model_path != model_cfg.path:
+            try:
+                self._cell_det_model = create_cell_detector(
+                    str(model_cfg.path), device="cpu", normalize_scheme=model_cfg.norm
+                )
+                self._cell_det_model_path = model_cfg.path
+            except Exception as exc:
+                QMessageBox.critical(self, "Model Load Error", str(exc))
+                return None
+        return self._cell_det_model
+
     def _show_evaluate(self) -> None:
         db = self._get_db()
         markers = db.get_distinct_channels("cell_marker")
@@ -585,6 +608,14 @@ class MainWindow(QMainWindow):
             return
 
         settings = get_settings()
+        if not settings.cell_det_models:
+            QMessageBox.warning(
+                self,
+                "No Model Registered",
+                "No cell detection models registered. Add one under cell_det_models "
+                "in settings.yaml or via the Settings dialog.",
+            )
+            return
 
         # Tag each slide (and thereby each marker) with its train/test group so
         # the dialog can filter by group. Group is derived from where the slide
@@ -604,6 +635,7 @@ class MainWindow(QMainWindow):
             markers,
             images,
             seg_available=settings.seg_model is not None,
+            cell_det_models=settings.cell_det_models,
             image_groups=image_groups,
             marker_groups=marker_groups,
             default_group=TEST,
@@ -616,6 +648,7 @@ class MainWindow(QMainWindow):
         selected_images = dlg.selected_images()
         iou_threshold = dlg.iou_threshold()
         task = dlg.task_type()
+        model_cfg = dlg.selected_model()
 
         if not selected_markers or not selected_images:
             QMessageBox.warning(
@@ -633,16 +666,6 @@ class MainWindow(QMainWindow):
             )
             return
 
-        model_path = settings.cell_det_model
-        if model_path is None or not model_path.exists():
-            QMessageBox.warning(
-                self,
-                "Model Not Found",
-                f"Cell detection model not found:\n{model_path}\n\n"
-                "Check cell_det_model in settings.yaml.",
-            )
-            return
-
         jobs = self._build_eval_jobs(selected_images, slide_paths, selected_markers)
         total_fovs = sum(len(job.fovs) for job in jobs)
         if total_fovs == 0:
@@ -653,20 +676,16 @@ class MainWindow(QMainWindow):
             )
             return
 
-        if self._cell_det_model is None:
-            try:
-                self._cell_det_model = create_cell_detector(
-                    str(model_path), device="cpu", normalize_scheme=settings.cell_det_norm
-                )
-            except Exception as exc:
-                QMessageBox.critical(self, "Model Load Error", str(exc))
-                return
+        cell_det_model = self._load_cell_det_model(model_cfg)
+        if cell_det_model is None:
+            return
 
+        self._eval_model_name = model_cfg.name
         self._evaluate_action.setEnabled(False)
         self._progress_bar.setValue(0)
         self._progress_bar.setMaximum(total_fovs)
         self._progress_bar.setVisible(True)
-        worker = EvaluationWorker(self._cell_det_model, jobs, iou_threshold)
+        worker = EvaluationWorker(cell_det_model, jobs, iou_threshold)
         worker.signals.progress.connect(self._on_eval_progress)
         worker.signals.finished.connect(self._on_eval_finished)
         worker.signals.error.connect(self._on_eval_error)
@@ -713,8 +732,7 @@ class MainWindow(QMainWindow):
     def _on_eval_finished(self, result) -> None:
         self._progress_bar.setVisible(False)
         self._evaluate_action.setEnabled(True)
-        model_path = get_settings().cell_det_model
-        model_name = model_path.stem if model_path else "cell_det_model"
+        model_name = self._eval_model_name or "cell_det_model"
         try:
             self._get_eval_db().save_evaluation(result, model_name)
         except Exception as exc:
@@ -950,23 +968,18 @@ class MainWindow(QMainWindow):
             return
 
         settings = get_settings()
-        model_path = settings.cell_det_model
-        if model_path is None or not model_path.exists():
+        model_cfg = settings.default_cell_det_model()
+        if model_cfg is None:
             QMessageBox.warning(
                 self,
-                "Model Not Found",
-                f"Cell detection model not found:\n{model_path}\n\nCheck cell_det_model in settings.yaml.",
+                "No Model Registered",
+                "No cell detection models registered. Add one under cell_det_models "
+                "in settings.yaml or via the Settings dialog.",
             )
             return
 
-        if self._cell_det_model is None:
-            try:
-                self._cell_det_model = create_cell_detector(
-                    str(model_path), device="cpu", normalize_scheme=settings.cell_det_norm
-                )
-            except Exception as exc:
-                QMessageBox.critical(self, "Model Load Error", str(exc))
-                return
+        if self._load_cell_det_model(model_cfg) is None:
+            return
 
         # Locate DAPI/Hoechst channel and the active marker channel.
         dapi_idx = None
