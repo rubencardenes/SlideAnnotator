@@ -560,9 +560,7 @@ class ReviewWindow(QDialog):
         # swallowed by whatever widget (e.g. the marker list's type-ahead
         # search) previously held focus.
         self._annot_label.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self._annot_label.setToolTip(
-            "Click: add cell marker    Hover + D: delete cell marker"
-        )
+        self._annot_label.setToolTip("Click: add cell marker    Hover + D: delete cell marker")
         self._annot_label.installEventFilter(self)
         annot_box_layout.addWidget(self._annot_label)
         images_layout.addWidget(annot_box, 1)
@@ -841,9 +839,7 @@ class ReviewWindow(QDialog):
             if m.channel == entry.channel and fx1 <= m.x <= fx2 and fy1 <= m.y <= fy2
         ]
 
-    def _marker_boxes_with_ids(
-        self, entry: FovEntry
-    ) -> list[tuple[str, int, int, int, int]]:
+    def _marker_boxes_with_ids(self, entry: FovEntry) -> list[tuple[str, int, int, int, int]]:
         """Return (id, bx1, by1, bx2, by2) boxes, relative to the FOV origin, for
         markers of *entry.channel* inside the FOV's bounds."""
         store = self._get_store(entry.slide_name)
@@ -864,8 +860,7 @@ class ReviewWindow(QDialog):
         """Return (bx1, by1, bx2, by2) boxes, relative to the FOV origin, for
         markers of *entry.channel* inside the FOV's bounds."""
         return [
-            (bx1, by1, bx2, by2)
-            for _id, bx1, by1, bx2, by2 in self._marker_boxes_with_ids(entry)
+            (bx1, by1, bx2, by2) for _id, bx1, by1, bx2, by2 in self._marker_boxes_with_ids(entry)
         ]
 
     def _overlapping_regions(self, entry: FovEntry) -> list:
