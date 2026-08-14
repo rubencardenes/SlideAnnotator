@@ -23,14 +23,14 @@ A desktop annotation tool for multiplex immunofluorescence (mIF) whole-slide ima
 - **FOV image export** — **File → Save FOV Images…** crops each FOV at full resolution and saves a PNG per FOV in an `images/` folder next to the slide. Channel assignment follows fluorescence conventions: DAPI or Hoechst → blue; remaining visible channels → red / green.
 - **Cell marker export** — **File → Export Cell Markers (txt)…** writes a text file listing, for every FOV, the bounding boxes of all markers that fall inside it.
 - **Annotation visibility toggle** — press `Space` or click the eye button in the toolbar to show / hide all annotations instantly.
-- **Annotation persistence** — annotations are saved as JSON files in a configurable directory and can be reloaded with the toolbar load button or on the next session.
+- **Annotation persistence** — annotations are saved in a SQL database, in a configurable directory for fast retrieval and better maintenance.
 - **View settings persistence** — per-image channel visibility, colour, and intensity range are saved automatically to `viewsettings.json` next to the slide and restored when reopening.
 - **Configurable settings** — `settings.yaml` at the project root (or `~/.config/slideannotator/settings.yaml`) controls application-level behaviour. All settings can also be edited and saved at runtime via **StarDist → Settings**.
 - **Unsaved-changes guard** — prompts to save before opening a new image or quitting.
 - **Colorful icon toolbar** — tool buttons use crisp QPainter-drawn icons (pan, marker, region, select, eye, box-marker, save, load, quit) instead of text characters, avoiding platform emoji rendering issues.
 - **StarDist nucleus segmentation** — run StarDist (ONNX) inference on all FOVs in a background thread; detected cell outlines are overlaid on the slide. Toggle outline visibility with the toolbar button; customise all application settings (paths, appearance, FOV size) via **StarDist → Settings**.
-- **Cell detection (D-FINE / RT-DETR / RF-DETR)** — run an ONNX object-detection model on all FOV tiles in a background thread. The model family is auto-detected from the ONNX input/output signature, so D-FINE, RT-DETR, and RF-DETR detectors are interchangeable via a single `cell_det_model` setting. The active marker channel is mapped to red, DAPI/Hoechst to blue. Detected cells appear as zoom-invariant cross markers. Use the toolbar **Convert** button to turn detections into cell marker annotations.
-- **Configurable input normalization** — RF-DETR detectors support selectable preprocessing via `cell_det_norm`: `imagenet` (16-bit scale to 0–1 then ImageNet mean/std) or `none` (16-bit scale to 0–1 only). Set it in `settings.yaml` or from the settings dialog.
+- **Cell detection** — run an ONNX object-detection model on all FOV tiles in a background thread. The model family is auto-detected from the ONNX input/output signature, so D-FINE, RT-DETR, and RF-DETR detectors are interchangeable via a single `cell_det_model` setting. The active marker channel is mapped to red, DAPI/Hoechst to blue. Detected cells appear as zoom-invariant cross markers. Use the toolbar **Convert** button to turn detections into cell marker annotations.
+- **Configurable input normalization** — detectors support selectable preprocessing via `cell_det_norm`: `imagenet` (16-bit scale to 0–1 then ImageNet mean/std) or `none` (16-bit scale to 0–1 only). Set it in `settings.yaml` or from the settings dialog.
 - **Model evaluation** — evaluate a cell-detection model against your ground-truth annotations. Results appear in a sortable, filterable, and editable table, with markers/images selectable by train/test group.
 - **Image list panel** — a left-hand sidebar lists every slide image found under the configured `data_dir`, split into **Train** / **Test** sections. Each entry shows live annotation counts (markers / regions / FOVs) drawn from the SQLite database. Double-click any entry to open that slide.
 - **SQLite annotation database** — annotations are written to a SQLite database (WAL mode) in addition to JSON sidecars, enabling fast cross-slide queries and powering the image list panel counts.
@@ -215,20 +215,3 @@ slideannotator/
     └── colors.py           # Default channel colour assignment
 ```
 
-## Annotation file format
-
-Annotations are stored as a JSON sidecar in the configured `annotations_dir`:
-
-```json
-{
-  "version": "1.0",
-  "slide": "/path/to/image.tif",
-  "annotations": [
-    {"id": "<uuid>", "type": "cell_marker", "x": 1024.0, "y": 2048.0, "channel": "DAPI"},
-    {"id": "<uuid>", "type": "region", "points": [[x1, y1], [x2, y2], "..."], "channel": "CD8"},
-    {"id": "<uuid>", "type": "fov", "x": 4096.0, "y": 8192.0, "w": 512.0, "h": 512.0}
-  ]
-}
-```
-
-Coordinates are in level-0 (full-resolution) scene pixels.
