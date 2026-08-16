@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.12.0 (2026-08-16)
+
+### Documentation
+
+- **README**: Updated README
+  ([`3278f59`](https://github.com/rubencardenes/SlideAnnotator/commit/3278f59c584ba83c4800e2d380568fa69df4b6de))
+
+### Features
+
+- **packaging**: Build macOS, Windows and Linux installers
+  ([`39d70f5`](https://github.com/rubencardenes/SlideAnnotator/commit/39d70f51dff605e9ee8f8b1f90db8b4d135dcd9f))
+
+
 ## v1.11.0 (2026-08-07)
 
 ### Code Style
