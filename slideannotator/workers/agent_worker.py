@@ -1,17 +1,18 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 from dbagenticquery import AgentEvent, query
 from PySide6.QtCore import QThread, Signal
 
+from ..settings import USER_CONFIG_DIR
+
 try:
-    import dbagenticquery
     from dotenv import load_dotenv
 
     # dbagenticquery's own CLI loads its .env on startup; importing it as a
-    # library skips that, so replicate it here to pick up API keys.
-    load_dotenv(Path(dbagenticquery.__file__).resolve().parent.parent / ".env")
+    # library skips that, so replicate it here to pick up API keys. Frozen, the
+    # installed package lives inside a read-only bundle, so the keys live in the
+    # user config dir instead. Existing environment variables always win.
+    load_dotenv(USER_CONFIG_DIR / ".env", override=False)
 except ImportError:
     pass
 

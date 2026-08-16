@@ -1,18 +1,53 @@
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
 
-_SEARCH_PATHS = [
-    Path(__file__).parent.parent / "settings.yaml",  # project root (dev)
-    Path.home() / ".config" / "slideannotator" / "settings.yaml",  # user config
-]
-
 _DEFAULTS = {
     "annotations_dir": "~/data/annotations",
 }
+
+USER_CONFIG_DIR = Path.home() / ".config" / "slideannotator"
+
+
+def is_frozen() -> bool:
+    """True when running from a PyInstaller bundle (.app / .exe / AppImage)."""
+    return getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS")
+
+
+def resource_dir() -> Path:
+    """Root of the bundled read-only resources.
+
+    Frozen, data files land next to the executable under ``sys._MEIPASS``, laid
+    out with the same package-relative paths as in the source tree.
+    """
+    if is_frozen():
+        return Path(sys._MEIPASS) / "slideannotator"
+    return Path(__file__).parent
+
+
+def bundled_stardist_model() -> Path | None:
+    """The StarDist model shipped with the app, if present."""
+    path = resource_dir() / "resources" / "models" / "stardist-versatile-fluo_dynamic.onnx"
+    return path if path.exists() else None
+
+
+def search_paths() -> list[Path]:
+    """Config locations, most specific first.
+
+    Frozen, the user config wins outright: the project-root ``settings.yaml``
+    would live inside a read-only bundle and carry the packager's own paths.
+    """
+    user = USER_CONFIG_DIR / "settings.yaml"
+    if is_frozen():
+        return [user]
+    return [
+        Path(__file__).parent.parent / "settings.yaml",  # project root (dev)
+        user,  # user config
+    ]
 
 
 @dataclass
@@ -41,7 +76,11 @@ class Settings:
     stardist_model: Path | None = field(default=None)
     cell_det_models: list[CellDetModelConfig] = field(default_factory=list)
     seg_model: Path | None = field(default=None)
-    db_path: Path = field(default_factory=lambda: Path("annotations.db"))
+    # Absolute by default: launched from Finder a frozen app has ``/`` as CWD,
+    # so a bare relative name would resolve outside the user's home.
+    db_path: Path = field(
+        default_factory=lambda: Path.home() / "data" / "annotations" / "annotations.db"
+    )
     eval_db_path: Path | None = field(default=None)
     data_dir: Path | None = field(default=None)
     fov_size: tuple[int, int] = (512, 512)
@@ -68,6 +107,8 @@ class Settings:
         s = Settings()
         if "annotations_dir" in data:
             s.annotations_dir = Path(data["annotations_dir"]).expanduser()
+            # Keep the DB beside the annotations unless explicitly overridden.
+            s.db_path = s.annotations_dir / "annotations.db"
         if "stardist_model" in data:
             s.stardist_model = Path(data["stardist_model"]).expanduser()
         if "cell_det_models" in data:
@@ -109,6 +150,10 @@ class Settings:
         if "detections_color" in data:
             v = data["detections_color"]
             s.detections_color = (int(v[0]), int(v[1]), int(v[2]))
+        if s.stardist_model is None:
+            # Fall back to the model shipped inside the installer, so nuclei
+            # detection works on a fresh install with no configuration.
+            s.stardist_model = bundled_stardist_model()
         return s
 
 
@@ -165,8 +210,9 @@ def save_settings(s: Settings) -> None:
         }
     )
 
-    save_path = _SEARCH_PATHS[0]
-    for path in _SEARCH_PATHS:
+    paths = search_paths()
+    save_path = paths[0]
+    for path in paths:
         if path.exists():
             save_path = path
             break
@@ -179,7 +225,7 @@ def save_settings(s: Settings) -> None:
 
 
 def _load() -> Settings:
-    for path in _SEARCH_PATHS:
+    for path in search_paths():
         if path.exists():
             try:
                 raw = yaml.safe_load(path.read_text()) or {}
