@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 import numpy as np
 from PySide6.QtCore import QObject, QRunnable, Signal, Slot
 
@@ -9,9 +7,6 @@ from ..annotations.models import FOVAnnotation
 from .ONNXInferenceBase import ONNXInferenceBase
 
 _TILE_SIZE = 512
-# TODO: remove debug — temp dir for saving inference tiles
-_DEBUG_TILE_DIR = Path(__file__).parents[2] / "tmp" / "cell_det_tiles"
-_DEBUG_TILE_DIR.mkdir(parents=True, exist_ok=True)
 
 
 class _Signals(QObject):

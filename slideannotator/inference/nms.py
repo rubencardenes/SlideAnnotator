@@ -3,6 +3,28 @@ from time import time
 import numpy as np
 
 
+class NMSExtensionUnavailable(RuntimeError):
+    """The compiled StarDist NMS extension is missing for this platform."""
+
+
+def _nms_ext(module_name):
+    """Import a compiled NMS extension, or explain why it is unavailable.
+
+    ``lib/stardist2d`` is a prebuilt macOS/arm64 CPython 3.12 binary, so on
+    other platforms StarDist inference has to degrade with a clear message
+    instead of an opaque ImportError from deep inside the call stack.
+    """
+    from importlib import import_module
+
+    try:
+        return import_module(f".lib.{module_name}", __package__)
+    except ImportError as e:
+        raise NMSExtensionUnavailable(
+            f"StarDist non-maximum suppression is unavailable on this platform: "
+            f"the compiled '{module_name}' extension is not bundled ({e})."
+        ) from e
+
+
 def _raise(e):
     if isinstance(e, BaseException):
         raise e
@@ -210,7 +232,7 @@ def non_maximum_suppression_inds(
 
     returns indices of selected polygons
     """
-    from .lib.stardist2d import c_non_max_suppression_inds
+    c_non_max_suppression_inds = _nms_ext("stardist2d").c_non_max_suppression_inds
 
     assert dist.ndim == 2
     assert points.ndim == 2
@@ -413,7 +435,7 @@ def non_maximum_suppression_3d_inds(
 
     returns indices of selected polygons
     """
-    from .lib.stardist3d import c_non_max_suppression_inds
+    c_non_max_suppression_inds = _nms_ext("stardist3d").c_non_max_suppression_inds
 
     assert dist.ndim == 2
     assert points.ndim == 2

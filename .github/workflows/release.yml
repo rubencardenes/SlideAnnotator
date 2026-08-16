@@ -3,12 +3,19 @@ name: Release
 on:
   push:
     branches: ["main"]
+  # Manual runs build and upload installers as workflow artifacts without
+  # cutting a release — the way to test packaging changes.
+  workflow_dispatch:
 
 jobs:
   release:
     runs-on: ubuntu-latest
+    if: github.event_name == 'push'
     permissions:
       contents: write
+    outputs:
+      released: ${{ steps.semrel.outputs.released }}
+      tag: ${{ steps.semrel.outputs.tag }}
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
@@ -31,6 +38,104 @@ jobs:
         run: uv run python -c "import slideannotator"
 
       - name: Run semantic-release
+        id: semrel
         run: |
+          before="$(git describe --tags --abbrev=0 2>/dev/null || echo none)"
           uv run semantic-release version
           uv run semantic-release publish
+          after="$(git describe --tags --abbrev=0 2>/dev/null || echo none)"
+          if [ "$before" != "$after" ]; then
+            echo "released=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "released=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "tag=$after" >> "$GITHUB_OUTPUT"
+
+  # Installers are built here rather than in a workflow triggered by the tag:
+  # tags pushed with GITHUB_TOKEN do not trigger other workflows.
+  installers:
+    needs: release
+    if: ${{ !cancelled() && (needs.release.outputs.released == 'true' || github.event_name == 'workflow_dispatch') }}
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            target: macos-arm64
+            artifact: dist/*.dmg
+          - os: windows-latest
+            target: win64
+            artifact: dist/*-setup.exe
+          - os: ubuntu-22.04
+            target: linux-x86_64
+            artifact: dist/*.AppImage
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # On a release run, build the tag semantic-release just created.
+          ref: ${{ needs.release.outputs.released == 'true' && needs.release.outputs.tag || github.ref }}
+
+      - name: Install Qt runtime libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libegl1 libgl1 libxkbcommon0 libxkbcommon-x11-0 libdbus-1-3 \
+            libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
+            libxcb-randr0 libxcb-render-util0 libxcb-shape0
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      # The bundled StarDist NMS extension is a CPython 3.12 binary.
+      - name: Pin Python 3.12
+        run: uv python install 3.12
+
+      - name: Configure git for private dependencies
+        run: git config --global url."https://${{ secrets.GH_PAT }}@github.com/".insteadOf "https://github.com/"
+
+      - name: Install dependencies
+        run: uv sync --group build
+
+      - name: Build macOS .app and .dmg
+        if: runner.os == 'macOS'
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+          MACOS_NOTARY_KEY: ${{ secrets.MACOS_NOTARY_KEY }}
+          MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+          MACOS_NOTARY_ISSUER: ${{ secrets.MACOS_NOTARY_ISSUER }}
+        run: ./packaging/build_macos.sh
+
+      - name: Verify the macOS bundle is self-contained
+        if: runner.os == 'macOS'
+        run: ./packaging/smoke_test.sh
+
+      - name: Build Windows installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./packaging/build_windows.ps1
+
+      - name: Build Linux AppImage
+        if: runner.os == 'Linux'
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: ./packaging/build_linux.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SlideAnnotator-${{ matrix.target }}
+          path: ${{ matrix.artifact }}
+          if-no-files-found: error
+
+      - name: Attach to the GitHub release
+        if: needs.release.outputs.released == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: gh release upload "${{ needs.release.outputs.tag }}" ${{ matrix.artifact }} --clobber

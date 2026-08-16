@@ -53,7 +53,7 @@ A desktop annotation tool for multiplex immunofluorescence (mIF) whole-slide ima
 
 - Python ≥ 3.12
 - [PySide6](https://pypi.org/project/PySide6/) ≥ 6.6
-- [pyvips](https://pypi.org/project/pyvips/) ≥ 2.2 (requires libvips ≥ 8.9 for SubIFD pyramid support)
+- [pyvips](https://pypi.org/project/pyvips/) ≥ 2.2, installed as `pyvips[binary]` so libvips ships as a wheel — no system libvips needed
 - [numpy](https://pypi.org/project/numpy/) ≥ 1.26
 - [PyYAML](https://pypi.org/project/PyYAML/) ≥ 6.0
 - [h5py](https://pypi.org/project/h5py/) ≥ 3.0 (required for Imaris `.ims` files)
@@ -62,6 +62,30 @@ A desktop annotation tool for multiplex immunofluorescence (mIF) whole-slide ima
 - `dbagenticquery` (text-to-SQL agent powering the AI query panel; requires an LLM API key, see its own `.env` configuration)
 
 ## Installation
+
+### Installers (no Python required)
+
+Download the installer for your platform from the [latest release](https://github.com/rubencardenes/SlideAnnotator/releases/latest). Nothing else needs to be installed — libvips, Qt and the ONNX runtime all ship inside.
+
+| Platform | File |
+|----------|------|
+| macOS (Apple Silicon) | `SlideAnnotator-<version>-macos-arm64.dmg` |
+| Windows 64-bit | `SlideAnnotator-<version>-win64-setup.exe` |
+| Linux x86_64 | `SlideAnnotator-<version>-x86_64.AppImage` |
+
+**macOS.** The app is not yet signed with an Apple Developer ID, so Gatekeeper blocks it on first launch ("SlideAnnotator is damaged and can't be opened"). Open the DMG, drag the app to Applications, then either right-click it and choose **Open** (confirm once), or run:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/SlideAnnotator.app
+```
+
+**Linux.** Mark the AppImage executable before running it: `chmod +x SlideAnnotator-*.AppImage`.
+
+The nucleus-segmentation model is bundled, so StarDist works out of the box on macOS. The larger cell-detection models are published as separate release assets — download the one you need and register it under `cell_det_models` (see [Configuration](#configuration)).
+
+> Platform note: StarDist nucleus segmentation requires a compiled extension that currently exists only for macOS on Apple Silicon. On Windows and Linux the rest of the app works normally, but that feature reports itself as unavailable.
+
+### From source (development)
 
 ```bash
 # Clone and enter the repo
@@ -74,6 +98,20 @@ uv sync
 # Or with plain pip
 pip install -e .
 ```
+
+### Building the installers
+
+```bash
+uv sync --group build
+
+./packaging/build_macos.sh        # -> dist/SlideAnnotator-<version>-macos-arm64.dmg
+./packaging/smoke_test.sh         # verify the bundle is self-contained
+
+pwsh -File packaging/build_windows.ps1   # Windows
+./packaging/build_linux.sh               # Linux
+```
+
+CI builds all three on every release (`.github/workflows/release.yml`); a manual `workflow_dispatch` run builds them as artifacts without publishing a release.
 
 ## Usage
 
@@ -108,11 +146,13 @@ Open an image with **File → Open Image** (`Ctrl+O`).
 
 ## Configuration
 
-SlideAnnotator reads `settings.yaml` from the project root directory first, then from `~/.config/slideannotator/settings.yaml`. A minimal file looks like:
+Running from source, SlideAnnotator reads `settings.yaml` from the project root directory first, then from `~/.config/slideannotator/settings.yaml`. **Installed from an installer it only reads `~/.config/slideannotator/settings.yaml`**, since the bundle itself is read-only. Copy `settings.example.yaml` there to get started. A minimal file looks like:
 
 ```yaml
 annotations_dir: ~/data/annotations
 ```
+
+API keys for the AI query panel go in `~/.config/slideannotator/.env` (environment variables already set take precedence).
 
 | Key | Default | Description |
 |-----|---------|-------------|

@@ -1,0 +1,26 @@
+# Copy to settings.yaml (development) or to
+# ~/.config/slideannotator/settings.yaml (installed app) and adjust the paths.
+#
+# Every key is optional. Omitted keys fall back to the defaults in
+# slideannotator/settings.py; omitting `stardist_model` uses the model bundled
+# with the installer.
+
+annotations_dir: ~/data/annotations
+# db_path defaults to <annotations_dir>/annotations.db
+# db_path: ~/data/annotations/annotations.db
+data_dir: ~/data
+
+# stardist_model: ~/data/models/stardist-versatile-fluo_dynamic.onnx
+
+# Cell-detection models are downloaded separately (see the release assets);
+# they are too large to ship inside the installer.
+# cell_det_models:
+#   - path: ~/data/models/rf-detr-cells.onnx
+#     norm: none        # "none" (16-bit 0-1 scale) or "imagenet"
+#     default: true
+
+fov_size: [512, 512]
+outline_thickness: 4
+outline_color: [0, 255, 0]
+region_opacity: 46
+detections_color: [51, 237, 55]
