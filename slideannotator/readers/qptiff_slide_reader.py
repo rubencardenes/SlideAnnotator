@@ -115,9 +115,7 @@ class QptiffSlideReader:
             for channel, name in enumerate(channel_names):
                 page = by_name[name]
                 if page.tiled:
-                    image = pyvips.Image.tiffload(
-                        str(self.path), page=page.page, access="random"
-                    )
+                    image = pyvips.Image.tiffload(str(self.path), page=page.page, access="random")
                 else:
                     # Small QPTIFF pyramid levels are often stripped. libtiff
                     # cannot serve arbitrary tile reads from those pages, so
@@ -166,7 +164,9 @@ class QptiffSlideReader:
         for page_number in range(page_count):
             image = pyvips.Image.tiffload(str(self.path), page=page_number)
             image_fields = image.get_fields()
-            description = image.get("image-description") if "image-description" in image_fields else ""
+            description = (
+                image.get("image-description") if "image-description" in image_fields else ""
+            )
             try:
                 root = ET.fromstring(description)
             except (ET.ParseError, TypeError):
