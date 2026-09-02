@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.13.0 (2026-09-02)
+
+### Code Style
+
+- **qptiff_slide_reader**: Fixed ruff linting
+  ([`46292db`](https://github.com/rubencardenes/SlideAnnotator/commit/46292db6b532dacef09b348ca54514c25e3eff93))
+
+### Features
+
+- Added qptiff support
+  ([`0011196`](https://github.com/rubencardenes/SlideAnnotator/commit/0011196adcb481bdae1e3e2732e4284c68cf4eb7))
+
+
 ## v1.12.0 (2026-08-16)
 
 ### Documentation
