@@ -4,6 +4,7 @@ from .czi_slide_reader import CziSlideReader
 from .ims_slide_reader import ImsSlideReader
 from .protocol import ChannelInfo as ChannelInfo
 from .protocol import SlideReader
+from .qptiff_slide_reader import QptiffSlideReader
 from .slide_reader import OmeTifSlideReader
 
 _SUPPORTED = {".tif", ".tiff", ".svs", ".ndpi", ".scn", ".qptiff", ".ims", ".czi"}
@@ -18,4 +19,6 @@ def open_slide(path: Path) -> SlideReader:
         return ImsSlideReader(path)
     if suffix == ".czi":
         return CziSlideReader(path)
+    if suffix == ".qptiff":
+        return QptiffSlideReader(path)
     return OmeTifSlideReader(path)
